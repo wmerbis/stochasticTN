@@ -1,8 +1,5 @@
-#
-#
-#
-#
-#
+# Copyright 2023 stochasticTN Developers, GNU GPLv3
+
 """ Implementations of common TN operations for stochastic MPS """
 
 import numpy as np
