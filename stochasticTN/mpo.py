@@ -1,8 +1,4 @@
-# 
-#
-#
-#
-#
+# Copyright 2023 stochasticTN Developers, GNU GPLv3
 
 import numpy as np
 from typing import Any, Optional, List
