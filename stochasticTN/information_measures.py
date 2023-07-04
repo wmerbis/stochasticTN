@@ -1,9 +1,5 @@
-#
-#
-#
-#
-#
-#
+# Copyright 2023 stochasticTN Developers, GNU GPLv3
+
 """ Implementations of various information theory measures for the stochastic MPS class
 """
 
