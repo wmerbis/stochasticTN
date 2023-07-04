@@ -1,9 +1,6 @@
-#
-#
-#
-#
-#
-#
+# Copyright 2023 stochasticTN Developers, GNU GPLv3
+
+''' Implementation of variational MPS optimization for (titlted) Markov generators in MPO form '''
 
 import numpy as np
 from scipy.sparse.linalg import eigs, LinearOperator, ArpackNoConvergence
