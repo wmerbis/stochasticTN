@@ -1,7 +1,7 @@
 Tensor Networks for Stochastic Models
 -------------------------------------
 
-Harvasting the power of tensor networks for representing high-dimensional probability distributions of stochastic systems.
+Harvesting the power of tensor networks for representing high-dimensional probability distributions of stochastic systems.
 This code forms the base for the computations performed in the paper:
   
   | **Efficient simulations of epidemic models with tensor networks: application to the one-dimensional SIS model**
