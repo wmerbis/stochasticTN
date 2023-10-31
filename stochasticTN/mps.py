@@ -165,10 +165,10 @@ class MPS:
         Exponentially costly, so only use for small MPSs to compare with exact results
 
         Args:
-            emps: an MPS representation of the energy in the spin basis representation
+            mps: an MPS representation of the probability distribution
 
         Returns:
-            p: a 2**n dimensional vector with the probabilities of all spin configurations 
+            p: a 2**n dimensional vector with the probabilities of all configurations 
             
         Raises:
             ValueError if the length of the MPS is larger than 28 to prevent the distribution 
