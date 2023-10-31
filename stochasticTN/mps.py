@@ -1,4 +1,8 @@
-# Copyright 2023 stochasticTN Developers, GNU GPLv3
+# 
+#
+#
+#
+#
 
 import numpy as np
 from typing import Any, Optional, List
@@ -147,11 +151,11 @@ class MPS:
                 return np.linalg.norm(self.tensors[self.center])
         elif order == 1:
             flat = np.ones(2)
-            norm = np.ones(1)
+            norm = np.eye(self.bond_dimensions[0])
             for i, t in enumerate(self.tensors):
                 ttemp = np.tensordot(t,flat, axes = [1,0]) # ncon([flat,t],[[1],[-1,1,-2]])
-                norm = np.tensordot(norm, ttemp, axes = [0,0]) #ncon([norm,ttemp],[[1],[1,-1]])
-            return norm[0]       
+                norm = np.tensordot(norm, ttemp, axes = [1,0]) #ncon([norm,ttemp],[[1],[1,-1]])
+            return np.trace(norm)       
         else:
             raise ValueError("'order' of norm should be either '1' or '2'")
             
@@ -187,7 +191,7 @@ class MPS:
             np.save(PATH+'tensor'+str(i),tensor)
         
             
-def randomMPS(N,D,d=2):
+def randomMPS(N,D,d=2, bc = 'open'):
     """ Construct a random MPS object of length N with maximal bond dimension D, 
         where each tensor is filled with random numbers
         
@@ -195,16 +199,28 @@ def randomMPS(N,D,d=2):
         N: number of sites
         D: maximal bond dimension of the MPS
         d: physical dimension of each site
+        bc: 'open' or 'periodic' boundary conditions
         
     Returns:
         MPS: a MPS object of length N and maximal bond dimension D and physical dimension d
              filled with random numbers and canonicalized at the left-most site. 
     """
     tensors = [None]*N
-    tensors[0] = np.random.rand(1,d,D)
+    if bc == 'open':
+        tensors[0] = np.random.rand(1,d,D)
+    elif bc == 'periodic':
+        tensors[0] = np.random.rand(D,d,D)
+    else:
+        raise ValueError("Please specify bc as 'open' or 'periodic'.") 
+        
     for i in range(1,N-1):
-        tensors[i] = np.random.rand(D,d,D) # Convention: first index is physical index
-    tensors[N-1] = np.random.rand(D,d,1)
+        tensors[i] = np.random.rand(D,d,D) # Convention: middle index is physical index
+    
+    if bc == 'open':
+        tensors[N-1] = np.random.rand(D,d,1)
+    elif bc == 'periodic':
+        tensors[N-1] = np.random.rand(D,d,D)
+        
     return MPS(tensors,canonicalize=True)
 
 def loadMPS(name: str)->MPS:
@@ -230,3 +246,4 @@ def loadMPS(name: str)->MPS:
         raise ValueError('Physical dimensions do not match up!')
     
     return mps
+    

@@ -1,4 +1,8 @@
-# Copyright 2023 stochasticTN Developers, GNU GPLv3
+# 
+#
+#
+#
+#
 
 import numpy as np
 from typing import Any, Optional, List
@@ -6,17 +10,17 @@ from stochasticTN.linalg import svd
 
 
 class MPO:
-    """ Defines the MPO class for the stochastic MPS package:
+    """ Defines the MPO class for the stochasticTN package:
     
     Attributes:
     
         * 'MPO.tensors': A list of MPS tensors with length N and index structure:
         
-                 1
+                 2
                  |
             0 -- x -- 3 
                  |
-                 2
+                 1
                  
         * 'MPO.center': Location of orthogonality site of the MPO. Can be moved with MPO.position(site)
         * 'MPO.bond_dimensions: list of local bond dimensions with length N + 1
@@ -55,7 +59,7 @@ class MPO:
     def position(self, site: int, normalize_SVs: Optional[bool] = True,
                      Dmax: Optional[int] = None, 
                      cutoff: Optional[float] = 0) -> float:
-        ''' Puts MPS in canonical form with respect to `site` such that all 
+        ''' Puts MPO in canonical form with respect to `site` such that all 
         tensors to the left and to the right of `site` are unitary
         
         Arg:
@@ -232,7 +236,7 @@ class SIS_MPO(MPO):
             A[3,:,:,0] = Wis
         else:
             pass
-
+        
         tensors = [None]*N
         tensors[0] = L
         tensors[N-1] = R

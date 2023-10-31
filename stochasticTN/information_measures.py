@@ -1,5 +1,9 @@
-# Copyright 2023 stochasticTN Developers, GNU GPLv3
-
+#
+#
+#
+#
+#
+#
 """ Implementations of various information theory measures for the stochastic MPS class
 """
 
@@ -26,13 +30,14 @@ def ShannonE(mps: MPS, base: Optional[float] = 2) -> float:
         Hx: Shannon entropy of MPS.
     
     '''
-
+    
     d=mps.physical_dimensions[0]
     N=len(mps)
-    px = mps.tensors[0].reshape(d,mps.bond_dimensions[1])
+    px = mps.tensors[0]
     for i in range(1,N):
-        px = np.tensordot(px, mps.tensors[i], axes=[i,0])
+        px = np.tensordot(px, mps.tensors[i], axes=[-1,0])
     
+    px = np.trace(px, axis1 = 0, axis2 = -1 )
     px = np.reshape(px, d**N)
     if mps.norm() < 0:
         px = -px
@@ -70,6 +75,7 @@ def mutual_information(mps: MPS, site: int, SE: Optional[float] = 0, base: Optio
         ketR = np.tensordot(ketRi, ketR, axes=[1,0])
     for i in range(site, -1,-1):
         ketR = np.tensordot(mps.tensors[i], ketR, axes=[2,0])
+    ketR = np.trace(ketR, axis1 = 0, axis2 = -1)
     ketR= np.reshape(ketR, d**(site+1))
     if norm < 0:
         ketR = -ketR
@@ -82,7 +88,8 @@ def mutual_information(mps: MPS, site: int, SE: Optional[float] = 0, base: Optio
         ketLi = np.tensordot(mps.tensors[i], normV, axes=[1,0])
         ketL = np.tensordot(ketL, ketLi, axes=[1,0])
     for i in range(site+1,N):
-        ketL = np.tensordot(ketL, mps.tensors[i], axes = [i-site,0])
+        ketL = np.tensordot(ketL, mps.tensors[i], axes = [-1,0])
+    ketL = np.trace(ketL, axis1=0, axis2=-1)
     ketL = np.reshape(ketL, d**(N-site-1))
 
     if norm < 0:
