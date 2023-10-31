@@ -1,5 +1,8 @@
-# Copyright 2023 stochasticTN Developers, GNU GPLv3
-
+#
+#
+#
+#
+#
 """ Implementations of common TN operations for stochastic MPS """
 
 import numpy as np
@@ -105,13 +108,17 @@ def MPOexpectation(mps: MPS, mpo: MPO, cx: Optional[str] ='stoch'):
     bra=getbra(mps,cx)
     
     Tens = ContractBraOKet(ket[0], MPO[0], bra[0])
-    Tens = np.reshape(Tens, (Tens.shape[3],Tens.shape[4],Tens.shape[5]))
+#     Tens = np.reshape(Tens, (Tens.shape[3],Tens.shape[4],Tens.shape[5]))
     
     for i in range(1,N):
-        Tens = np.tensordot(bra[i], Tens, axes = [0,2])
-        Tens = np.tensordot(MPO[i], Tens, axes = ([0,1],[3,0]))
-        Tens = np.tensordot(ket[i], Tens, axes = ([0,1],[3,0]))
-    return Tens.reshape(1)[0]
+        Tens = np.tensordot(Tens, bra[i], axes = [5,0])
+        Tens = np.tensordot(Tens, MPO[i], axes = ([4,5],[0,1]))
+        Tens = np.tensordot(Tens, ket[i], axes = ([3,5],[0,1])).transpose(0,1,2,5,4,3)
+    
+    sh = Tens.shape
+    Tens = np.reshape(Tens, (sh[0]*sh[1]*sh[2],sh[3]*sh[4]*sh[5]))
+    
+    return np.trace(Tens)
 
 
 def MPOvariance(mps: MPS, mpo: MPO, cx: Optional[str] ='stoch'):
@@ -134,16 +141,18 @@ def MPOvariance(mps: MPS, mpo: MPO, cx: Optional[str] ='stoch'):
     bra=getbra(mps,cx)
 
     Tens = ContractBraO2Ket(ket[0], MPO[0], bra[0])
-    Tens = np.reshape(Tens, (Tens.shape[4],Tens.shape[5],Tens.shape[6],Tens.shape[7]))
+#     Tens = np.reshape(Tens, (Tens.shape[4],Tens.shape[5],Tens.shape[6],Tens.shape[7]))
     
     for i in range(1,N):
-        Tens = np.tensordot(bra[i], Tens, axes = [0,3])
-        Tens = np.tensordot(MPO[i], Tens, axes = ([1,0],[0,4]))
-        Tens = np.tensordot(MPO[i], Tens, axes = ([1,0],[0,4]))
-        Tens = np.tensordot(ket[i], Tens, axes = ([1,0],[0,4]))        
-    Tens = np.reshape(Tens, 1)    
+        Tens = np.tensordot(Tens, bra[i], axes = [7,0])
+        Tens = np.tensordot(Tens, MPO[i], axes = ([6,7],[0,1]))
+        Tens = np.tensordot(Tens, MPO[i], axes = ([5,7],[0,1]))
+        Tens = np.tensordot(Tens, ket[i], axes = ([4,7],[0,1])).transpose(0,1,2,3,7,6,5,4)
+        
+    sh = Tens.shape
+    Tens = np.reshape(Tens, (sh[0]*sh[1]*sh[2]*sh[3],sh[4]*sh[5]*sh[6]*sh[7]))    
 
-    return Tens[0]
+    return np.trace(Tens)
 
 def single_site_occupancy(mps: MPS, site: int, norm: Optional[bool] = 0):
     ''' Computes the expectation value for 'site' to be occupied
@@ -159,6 +168,8 @@ def single_site_occupancy(mps: MPS, site: int, norm: Optional[bool] = 0):
         
     '''
     N=len(mps)
+    if site >= N:
+        raise ValueError("Site is larger than chain length!") 
     PI=[0,1]
     normV=[1,1]
     if norm == 0:
@@ -177,9 +188,9 @@ def single_site_occupancy(mps: MPS, site: int, norm: Optional[bool] = 0):
         
         PIcont=np.tensordot(PIcont,PIconti, axes=[1,0])
     
-    return PIcont[0,0]/norm
+    return np.trace(PIcont)/norm
     
-def single_site_vacancy(mps: MPS, site: int, norm: Optional[bool] = True):
+def single_site_vacancy(mps: MPS, site: int, norm: Optional[bool] = 0):
     ''' Computes the expectation value for 'site' to be empty
     
     Args:
@@ -193,6 +204,9 @@ def single_site_vacancy(mps: MPS, site: int, norm: Optional[bool] = True):
         
     '''
     N=len(mps)
+    if site >= N:
+        raise ValueError("Site is larger than chain length!") 
+    
     PI=[1,0]
     normV=[1,1]
     
@@ -212,7 +226,7 @@ def single_site_vacancy(mps: MPS, site: int, norm: Optional[bool] = True):
         
         PIcont=np.tensordot(PIcont,PIconti, axes=[1,0])
     
-    return PIcont[0,0]/norm
+    return np.trace(PIcont)/norm
     
     
 def single_site_magnetization(mps: MPS, site: int, norm: Optional[bool] = True):
@@ -248,7 +262,7 @@ def single_site_magnetization(mps: MPS, site: int, norm: Optional[bool] = True):
         
         PIcont=np.tensordot(PIcont,PIconti, axes=[1,0])
     
-    return PIcont[0,0]/norm
+    return np.trace(PIcont)/norm
 
 
     
