@@ -159,6 +159,33 @@ class MPS:
         else:
             raise ValueError("'order' of norm should be either '1' or '2'")
             
+    def probabilities(self):
+        '''
+        Explicitly compute all probabilities from the MPS representation. 
+        Exponentially costly, so only use for small MPSs to compare with exact results
+
+        Args:
+            emps: an MPS representation of the energy in the spin basis representation
+
+        Returns:
+            p: a 2**n dimensional vector with the probabilities of all spin configurations 
+            
+        Raises:
+            ValueError if the length of the MPS is larger than 28 to prevent the distribution 
+                from becoming too large
+        '''    
+        n = len(self)
+        if n > 28:
+            raise ValueError("MPS is too large to compute all probabilities!")
+            
+        p = self.tensors[0]
+        for i in range(1,n):
+            p = np.tensordot(p, self.tensors[i], axes = (-1,0))
+        if self.bond_dimensions[0] != 1:
+            p = np.trace(p, axis1 = 0, axis2 = -1)
+        
+        return p.reshape(2**n)/self.norm()
+            
     def save(self, name: Optional['str'] = None):
         ''' Routine to save mps tensors to store for later use
         '''
@@ -222,6 +249,66 @@ def randomMPS(N,D,d=2, bc = 'open'):
         tensors[N-1] = np.random.rand(D,d,D)
         
     return MPS(tensors,canonicalize=True)
+
+def occupied_mps(N,D, bc = 'open'):
+    '''
+    Creates an MPS with bond dimension D where all sites are in the 'occupied' (down) state
+    
+    Args:
+        N: number of sites
+        D: maximal bond dimension
+        bc: boundary conditions
+            - 'open' for open boundary conditions
+            - 'periodic' for periodic boundary conditions 
+    '''
+    tensors = N*[None]
+    bare = np.zeros((D,2,D))
+    bare[:,1,:] = np.eye(D,D)
+    
+    for i in range(N):
+        tensors[i] = bare
+    
+    if bc == 'open':
+        L = np.zeros((1,2,D))
+        R = np.zeros((D,2,1))
+        L[:,1,:] = np.ones((1,D))/D
+        R[:,1,:] = np.ones((D,1))
+        tensors[0] = L
+        tensors[N-1] = R
+        
+    return MPS(tensors, canonicalize = False)
+
+def uniform_mps(N,D, bc = 'open'):
+    '''
+    Creates an MPS with bond dimension D where all configurations appear with equal probability
+    
+    Args:
+        N: number of sites
+        D: maximal bond dimension
+        bc: boundary conditions
+            - 'open' for open boundary conditions
+            - 'periodic' for periodic boundary conditions 
+    '''
+    tensors = N*[None]
+    bare = np.zeros((D,2,D))
+    bare[:,0,:] = np.eye(D,D)
+    bare[:,1,:] = np.eye(D,D)
+    
+    for i in range(N):
+        tensors[i] = bare
+    
+    if bc == 'open':
+        L = np.zeros((1,2,D))
+        R = np.zeros((D,2,1))
+        L[:,0,:] = np.ones((1,D))/(D*N)
+        L[:,1,:] = np.ones((1,D))/(D*N)
+        R[:,0,:] = np.ones((D,1))
+        R[:,1,:] = np.ones((D,1))
+        tensors[0] = L
+        tensors[N-1] = R
+    
+    return MPS(tensors, canonicalize=False)
+
 
 def loadMPS(name: str)->MPS:
     ''' Loads a previously saved MPS and converts it to MPS class object
