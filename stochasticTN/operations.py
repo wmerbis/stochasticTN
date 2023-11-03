@@ -8,6 +8,7 @@
 import numpy as np
 from stochasticTN.mps import MPS
 from stochasticTN.mpo import MPO
+from stochasticTN.linalg import svd
 from typing import Any, Optional, List
 
 def ContractBraKet(ket, bra):
@@ -153,6 +154,112 @@ def MPOvariance(mps: MPS, mpo: MPO, cx: Optional[str] ='stoch'):
     Tens = np.reshape(Tens, (sh[0]*sh[1]*sh[2]*sh[3],sh[4]*sh[5]*sh[6]*sh[7]))    
 
     return np.trace(Tens)
+
+def MPSMPOcontraction(mps: MPS, mpo: MPO, 
+                      renormalize: Optional[bool] = False,
+                      Dmax: Optional[int] = None,
+                      cutoff: Optional[float] = 0):
+    '''
+    Contracts mps with an mpo site by site and optionaly performs trunctation on the singular value
+    spectrum. Overwrites input mps with the result of the contraction
+    
+    Args:
+        mps: input stochasticTN MPS object
+        mpo: input stochasticTN MPO object
+        renormalize: if True the output mps will be renormalized with specified cutoff and/or maximal bond dimension
+        Dmax: optional maximal bond dimension
+        cutoff: optional cutoff on the singular value spectrum
+        
+    Returns:
+        err: truncation error after renormalization
+    '''
+    if len(mps) != len(mpo):
+        raise ValueError("MPS and MPO of different lengths")
+    N = len(mps)
+    mps_bonds = mps.bond_dimensions
+    mpo_bonds = mpo.bond_dimensions
+    d = mps.physical_dimensions
+    err = 0
+    
+    for i, t in enumerate(mps):
+            
+        ttemp = np.tensordot(t, mpo.tensors[i], axes = [1,2]).transpose(0,2,3,1,4)
+        ttemp = np.reshape(ttemp, (mps_bonds[i]*mpo_bonds[i], d[i], mps_bonds[i+1]*mpo_bonds[i+1]))
+        
+        if renormalize and i>0:
+            ttemp = np.tensordot(sv, ttemp, axes = [1,0]) 
+                
+        if renormalize and i<N-1:
+            u, s, v, e = svd(ttemp, -1, Dmax, cutoff, True)
+            err += e
+            mps.tensors[i] = u
+            sv = np.tensordot(np.diag(s), v, axes =[1,0])
+            mps.center = i+1
+        else:
+            mps.tensors[i] = ttemp
+    
+    if renormalize:
+        e = mps.position(0, True, Dmax, cutoff) 
+        err += e
+        
+    return err
+
+def MPOMPOcontraction(mpo1: MPO, mpo2: MPO, 
+                      renormalize: Optional[bool] = False,
+                      Dmax: Optional[int] = None,
+                      cutoff: Optional[float] = 0):
+    '''
+    Contracts mpo with another mpo site by site and optionaly performs trunctation on the singular value
+    spectrum. 
+    
+    Args:
+        mpo1: input stochasticTN MPO object
+        mpo2: input second stochasticTN MPO object
+        renormalize: if True the output mps will be renormalized with specified cutoff and/or maximal bond dimension
+        Dmax: optional maximal bond dimension
+        cutoff: optional cutoff on the singular value spectrum
+        
+    Returns:
+        mpo: Output MPO object
+        err: truncation error after renormalization
+    '''
+    if len(mpo1) != len(mpo2):
+        raise ValueError("MPOs are of different lengths")
+    N = len(mpo1)
+    mpo1_bonds = mpo1.bond_dimensions
+    mpo2_bonds = mpo2.bond_dimensions
+    d = mpo1.physical_dimensions
+    err = 0
+    tensors = N*[None]
+    
+    for i, t in enumerate(mpo1):
+            
+        ttemp = np.tensordot(t, mpo2.tensors[i], axes = [1,2]).transpose(0,3,4,1,2,5)
+        ttemp = np.reshape(ttemp, (mpo1_bonds[i]*mpo2_bonds[i], d[i], d[i], mpo1_bonds[i+1]*mpo2_bonds[i+1]))
+        
+        if renormalize and i>0:
+            ttemp = np.tensordot(sv, ttemp, axes = [1,0]) 
+                
+        if renormalize and i<N-1:
+            u, s, v, e = svd(ttemp, -1, Dmax, cutoff, True)
+            err += e
+            tensors[i] = u
+            sv = np.tensordot(np.diag(s), v, axes =[1,0])
+            
+        else:
+            tensors[i] = ttemp
+    
+    mpo = MPO(tensors, canonicalize=False)
+    mpo.r = mpo1.r
+    mpo.s = mpo1.s
+    
+    if renormalize:
+        mpo.center = N-1
+        e = mpo.position(0, True, Dmax, cutoff) 
+        err += e
+        
+    return mpo, err
+    
 
 def single_site_occupancy(mps: MPS, site: int, norm: Optional[bool] = 0):
     ''' Computes the expectation value for 'site' to be occupied
