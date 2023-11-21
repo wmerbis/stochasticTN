@@ -40,6 +40,8 @@ class MPO:
                     
         self.tensors = tensors
         self.center = center
+        if canonicalize:
+            self.canonicalize()
         
     
     def __len__(self) -> int:
@@ -56,7 +58,7 @@ class MPO:
     def physical_dimensions(self) -> List:
         return [t.shape[1] for t in self]
     
-    def position(self, site: int, normalize_SVs: Optional[bool] = True,
+    def position(self, site: int, normalize_SVs: Optional[bool] = False,
                      Dmax: Optional[int] = None, 
                      cutoff: Optional[float] = 0) -> float:
         ''' Puts MPO in canonical form with respect to `site` such that all 
@@ -77,24 +79,18 @@ class MPO:
             
         truncation_error = 0
         if site == self.center:
-            return
+            return truncation_error
         
         elif self.center < site:
             for i in range(self.center, site):
-                u, s, v, err = svd(self.tensors[i], -1, Dmax, cutoff)
-                if normalize_SVs:
-                    s /= np.sum(s)
-                    
+                u, s, v, err = svd(self.tensors[i], -1, Dmax, cutoff, normalizeSVs = normalize_SVs)
                 self.tensors[i] = u
                 sv = np.tensordot(np.diag(s),v, axes= [1,0]) 
                 self.tensors[i+1] = np.tensordot(sv, self.tensors[i+1], axes = [1,0])
                 truncation_error += err
         else:
             for i in range(self.center,site, -1):
-                u, s, v, err = svd(self.tensors[i], 1, Dmax, cutoff)
-                if normalize_SVs:
-                    s /= np.sum(s)
-                    
+                u, s, v, err = svd(self.tensors[i], 1, Dmax, cutoff,normalizeSVs = normalize_SVs)
                 self.tensors[i] = v
                 us = np.tensordot(u,np.diag(s), axes= [1,0]) 
                 self.tensors[i-1] = np.tensordot(self.tensors[i-1], us, axes = [3,0])

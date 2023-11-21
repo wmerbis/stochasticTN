@@ -288,6 +288,8 @@ def uniform_mps(N,D, bc = 'open'):
         bc: boundary conditions
             - 'open' for open boundary conditions
             - 'periodic' for periodic boundary conditions 
+    Returns:
+        mps: the mps
     '''
     tensors = N*[None]
     bare = np.zeros((D,2,D))
@@ -307,6 +309,35 @@ def uniform_mps(N,D, bc = 'open'):
         tensors[0] = L
         tensors[N-1] = R
     
+    return MPS(tensors, canonicalize=False)
+
+def mps_from_array(array):
+    '''
+    Creates an direct product MPS with bond dimension 1 from the bits specified in 'array'
+    
+    Args:
+        N: number of sites
+        D: maximal bond dimension
+        bc: boundary conditions
+            - 'open' for open boundary conditions
+            - 'periodic' for periodic boundary conditions 
+    
+    Returns:
+        mps: the mps    
+    '''
+    N = len(array)
+    tensors = N*[None]
+    zero = np.array([1,0]).reshape(1,2,1)
+    one = np.array([0,1]).reshape(1,2,1)
+    
+    for i in range(N):
+        if array[i] == 0:
+            tensors[i] = zero
+        elif array[i] == 1:
+            tensors[i] = one
+        else:
+            raise ValueError("Input array should contain only bits (0 or 1)") 
+
     return MPS(tensors, canonicalize=False)
 
 
