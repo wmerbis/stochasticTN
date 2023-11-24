@@ -1,9 +1,12 @@
-# Copyright 2023 stochasticTN Developers, GNU GPLv3
-
-''' Implementation of variational MPS optimization for (titlted) Markov generators in MPO form '''
+#
+#
+#
+#
+#
+#
 
 import numpy as np
-from scipy.sparse.linalg import eigs, LinearOperator, ArpackNoConvergence
+from scipy.sparse.linalg import eigs, eigsh, LinearOperator, ArpackNoConvergence, ArpackError
 from sys import stdout
 from stochasticTN.mps import MPS
 from stochasticTN.mpo import MPO, occupancy_MPO
@@ -20,7 +23,8 @@ class DMRG:
     
     def __init__(self, mps: MPS, mpo: MPO,
                  left_bdy: Tensor,
-                 right_bdy: Tensor):
+                 right_bdy: Tensor,
+                cx: Optional[str] = 'stoch'):
         """ Class for DMRG simulations
 
         Args:
@@ -39,6 +43,7 @@ class DMRG:
         self.mpo = mpo
         self.Ls = {0: left_bdy}
         self.Rs = {len(mps) - 1: right_bdy}
+        self.cx = cx
     
    
     def add_R(self, site):
@@ -79,10 +84,10 @@ class DMRG:
             self.add_L(i)  
             
                              
-    def single_site_matvec(self, vec: np.ndarray,
-                        R: np.ndarray,
-                        L: np.ndarray,
-                        MPOmat: np.ndarray) -> np.ndarray:
+    def single_site_matvec(self, vec: Tensor,
+                        R: Tensor,
+                        L: Tensor,
+                        MPOmat: Tensor) -> Tensor:
         ''' Implements the single site matrix-vector multiplication needed for the 
             single site DMRG routine
             
@@ -105,11 +110,11 @@ class DMRG:
         Wv = np.tensordot(Wv, R, axes = ([1,3],[0,1]))
         return np.reshape(Wv, (vec.shape))
     
-    def double_site_matvec(self, vec: np.ndarray,
-                           R: np.ndarray,
-                           L: np.ndarray,
-                           MPOi: np.ndarray, 
-                           MPOi1: np.ndarray) -> np.ndarray:
+    def double_site_matvec(self, vec: Tensor,
+                           R: Tensor,
+                           L: Tensor,
+                           MPOi: Tensor, 
+                           MPOi1: Tensor) -> Tensor:
         ''' Implements the double site matrix-vector multiplication for the 
             double site DMRG routine
             
@@ -162,8 +167,13 @@ class DMRG:
         Weff = LinearOperator((vecshape,vecshape), 
                               matvec= lambda x: self.single_site_matvec(x,self.Rs[site],self.Ls[site],self.mpo.tensors[site]) )
         try:
-            ev0, Rev = eigs(Weff,k=1,which='LR', v0=bk, tol=tol, ncv = ncv)
-        except ArpackNoConvergence:
+            if self.cx == 'stoch':
+                ev0, Rev = eigs(Weff,k=1,which='LR', v0=bk, tol=tol, ncv = ncv)
+                Rev = Rev.real
+                ev0 = ev0.real
+            else:
+                ev0, Rev = eigsh(Weff,k=1,which='LA', v0=bk, tol=tol, ncv = ncv)            
+        except ArpackNoConvergence or ArpackError:
             print(f"\nAn exception occurred: eigenvector at site {site} did not converge")
             Rev = bk
             ev0 = np.array([1e100])
@@ -313,7 +323,7 @@ class DMRG:
                 converged = True
             final_energy = energy
             num_sweeps += 1
-            if num_sweeps >= MaxSweeps:
+            if num_sweeps >= MaxSweeps and not converged:
                 print(f"\nMaxSweeps {num_sweeps} reached before convergence to desired accuracy")
                 break
         
@@ -323,9 +333,12 @@ class DMRG:
         end_time=time.time()
         compt = end_time - start_time
         
-        print('\ns = %.6f,    n = %2i,    FE = %.9f,    delFE = %.9f    tps = %.2fs    <D>= %.2f   maxD = %i' %(self.mpo.s, num_sweeps, energy, variance, compt/num_sweeps, np.mean(self.mps.bond_dimensions[1:-1]), max(self.mps.bond_dimensions) ))
+        if self.mpo.s == 0:
+            print('\nr = %.3f,    n = %2i,    FE = %.9f,    delFE = %.9f    tps = %.2fs    <D>= %.2f   maxD = %i' %(self.mpo.r, num_sweeps, energy, variance, compt/num_sweeps, np.mean(self.mps.bond_dimensions[1:-1]), max(self.mps.bond_dimensions) ))
+        else:
+            print('\ns = %.6f,    n = %2i,    FE = %.9f,    delFE = %.9f    tps = %.2fs    <D>= %.2f   maxD = %i' %(self.mpo.s, num_sweeps, energy, variance, compt/num_sweeps, np.mean(self.mps.bond_dimensions[1:-1]), max(self.mps.bond_dimensions) ))
         
-        return final_energy, variance, truncation_error
+        return final_energy, variance, truncation_error, converged
     
     def optimize_double_site(self, site: int, 
                              sweep_direction: str,
@@ -362,12 +375,17 @@ class DMRG:
                                                                         self.mpo.tensors[site],
                                                                         self.mpo.tensors[site+1]) )
         try:
-            ev0, Rev = eigs(Weff,k=1,which='LR', v0=bk, tol=tol, ncv = ncv)
-        except ArpackNoConvergence :
+            if self.cx == 'stoch':
+                ev0, Rev = eigs(Weff,k=1,which='LR', v0=bk, tol=tol, ncv = ncv)
+                Rev = Rev.real
+                ev0 = ev0.real
+            else:
+                ev0, Rev = eigsh(Weff,k=1,which='LA', v0=bk, tol=tol, ncv = ncv)
+        except ArpackNoConvergence or ArpackError:
             print(f"\nAn exception occurred: eigenvector at sites {site}, {site+1} did not converge")
             Rev = bk
             ev0 = np.array([1e100])
-        Rev = Rev.real
+        
         Rev = np.reshape(Rev, sh)
         if sweep_direction == 'right':
             self.mps.tensors[site], s, v, truncation_error = svd(Rev, 2, Dmax, cutoff)
@@ -495,7 +513,7 @@ class DMRG:
                 converged = True
             final_energy = energy
             num_sweeps += 1
-            if num_sweeps >= MaxSweeps:
+            if num_sweeps >= MaxSweeps and not converged:
                 print(f"\nMaxSweeps {num_sweeps} reached before convergence to desired accuracy")
                 break
         
@@ -505,7 +523,9 @@ class DMRG:
         end_time=time.time()
         compt = end_time - start_time
         
+        if self.mpo.s == 0:
+            print('\nr = %.6f,    n = %2i,    FE = %.9f,    delFE = %.9f    tps = %.2fs    <D>= %.2f   maxD = %i' %(self.mpo.r, num_sweeps, final_energy, variance, compt/num_sweeps, np.mean(self.mps.bond_dimensions[1:-1]), max(self.mps.bond_dimensions) ))
+        else:
+            print('\ns = %.6f,    n = %2i,    FE = %.9f,    delFE = %.9f    tps = %.2fs    <D>= %.2f   maxD = %i' %(self.mpo.s, num_sweeps, final_energy, variance, compt/num_sweeps, np.mean(self.mps.bond_dimensions[1:-1]), max(self.mps.bond_dimensions) ))
         
-        print('\ns = %.6f,    n = %2i,    FE = %.9f,    delFE = %.9f    tps = %.2fs    <D>= %.2f   maxD = %i' %(self.mpo.s, num_sweeps, final_energy, variance, compt/num_sweeps, np.mean(self.mps.bond_dimensions[1:-1]), max(self.mps.bond_dimensions) ))
-        
-        return final_energy, variance, truncation_error
+        return final_energy, variance, truncation_error, converged
