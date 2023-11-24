@@ -173,8 +173,8 @@ class DMRG:
                 ev0 = ev0.real
             else:
                 ev0, Rev = eigsh(Weff,k=1,which='LA', v0=bk, tol=tol, ncv = ncv)            
-        except ArpackNoConvergence or ArpackError:
-            print(f"\nAn exception occurred: eigenvector at site {site} did not converge")
+        except (ArpackNoConvergence, ArpackError) as e:
+            print(f"\nAn {e} exception occurred for the eigenvector at site {site}")
             Rev = bk
             ev0 = np.array([1e100])
         Rev = Rev.real
@@ -381,8 +381,8 @@ class DMRG:
                 ev0 = ev0.real
             else:
                 ev0, Rev = eigsh(Weff,k=1,which='LA', v0=bk, tol=tol, ncv = ncv)
-        except ArpackNoConvergence or ArpackError:
-            print(f"\nAn exception occurred: eigenvector at sites {site}, {site+1} did not converge")
+        except (ArpackNoConvergence, ArpackError) as e:
+            print(f"\nAn {e} exception occurred for the eigenvector at sites {site}, {site+1}")
             Rev = bk
             ev0 = np.array([1e100])
         
