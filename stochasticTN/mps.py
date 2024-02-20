@@ -132,24 +132,26 @@ class MPS:
         
         return truncation_error
     
-    def norm(self, order: int = 1) -> float:
+    def norm(self, cx = 'stoch') -> float:
         """ Returns the norm of the mps, where `order` specifies the L^order norm
 
         Args:
-            order: the order is can be either 1 or 2 for the L^1 or L^2 norm respectively
+            cx: protocol for the norm: 
+            * 'complex' computes the L^2 norm for complex or real mps
+            * 'stoch' computes the L^1 norm for real valued mps
 
         Returns:
-            norm: the L^order norm of the mps 
+            norm: the desired norm of the mps 
 
         """
 
-        if order == 2:
+        if cx == 'complex':
             if self.center is None:
                 self.canonicalize()
                 return np.linalg.norm(self.tensors[0])
             else:
                 return np.linalg.norm(self.tensors[self.center])
-        elif order == 1:
+        elif cx == 'stoch':
             flat = np.ones(2)
             norm = np.eye(self.bond_dimensions[0])
             for i, t in enumerate(self.tensors):
@@ -157,7 +159,7 @@ class MPS:
                 norm = np.tensordot(norm, ttemp, axes = [1,0]) #ncon([norm,ttemp],[[1],[1,-1]])
             return np.trace(norm)       
         else:
-            raise ValueError("'order' of norm should be either '1' or '2'")
+            raise ValueError("'cx' should be either 'stoch' or 'complex'")
             
     def probabilities(self):
         '''

@@ -241,6 +241,105 @@ class SIS_MPO(MPO):
 
         super().__init__(tensors = tensors)
 
+class network_SIS(MPO):
+    '''
+    Builds an MPO for the epsilon-SIS Markovian network model 
+    '''
+    def __init__(self, A, r: float, s: float, 
+               epsilon: Optional[float] = 1e-3,
+               cutoff: Optional[float] = 1e-12)->None:
+        '''
+        Docstring
+        '''
+        self.r = r
+        self.s = s
+        self.epsilon = epsilon
+        
+        self.N = np.shape(A)[0]
+    
+        d=2
+        Ni = np.array([ [0, 0], [0, 1] ])
+        Wsi = np.array([ [-1, 0], [np.exp(s), 0] ])
+        Wis = np.array([ [0, np.exp(s)], [0, -1] ])
+        ID = np.array([[1,0],[0,1]])
+
+        L = np.zeros([1,d,d,2])
+        R = np.zeros([2,d,d,1])
+        M = np.zeros([2,d,d,2])
+
+        L[0,:,:,0] = Wis + epsilon*Wsi
+        L[0,:,:,1] = ID
+        R[0,:,:,0] = ID
+        R[1,:,:,0] = Wis + epsilon*Wsi
+        M[:,:,:,0] = R[:,:,:,0]
+        M[1,:,:,:] = L[0,:,:,:]
+
+
+        tensors = self.N*[None]
+        tensors[0] = L
+        for i in range(1,self.N-1):
+            tensors[i] = M
+        tensors[self.N-1] = R
+        super().__init__(tensors = tensors, center=0, canonicalize=False)
+        e = 0
+
+        for i in range(len(self)):
+            for j in range(i,len(self)):
+                if A[i,j] != 0:
+                    self.add_edge(i, j, r, s)
+                    e += self.canonicalize(normalize_SVs = False, cutoff = cutoff) 
+        
+        return
+                       
+    def add_edge(self,i,j,r,s):
+        N = len(self)
+        d=2
+        Ni = np.array([ [0, 0], [0, 1] ])
+        Wsi = np.array([ [-1, 0], [np.exp(s), 0] ])
+        Wis = np.array([ [0, np.exp(s)], [0, -1] ])
+        ID = np.array([[1,0],[0,1]])
+        
+        for k in range(len(self)):
+            if k < i:
+                if k ==0:
+                    self.tensors[k] = np.pad(self.tensors[k],((0,0),(0,0),(0,0),(0,1)))
+                    self.tensors[k][0,:,:,-1] = ID
+                else:
+                    self.tensors[k] = np.pad(self.tensors[k],((0,1),(0,0),(0,0),(0,1)))
+                    self.tensors[k][-1,:,:,-1] = ID
+            elif k == i:
+                if k ==0:
+                    self.tensors[k] = np.pad(self.tensors[k],((0,0),(0,0),(0,0),(0,2)))
+                    self.tensors[k][0,:,:,-2] = Ni
+                    self.tensors[k][0,:,:,-1] = r*Wsi
+                else:
+                    self.tensors[k] = np.pad(self.tensors[k],((0,1),(0,0),(0,0),(0,2)))
+                    self.tensors[k][-1,:,:,-2] = Ni
+                    self.tensors[k][-1,:,:,-1] = r*Wsi
+            elif k > i and k < j:
+                self.tensors[k] = np.pad(self.tensors[k],((0,2),(0,0),(0,0),(0,2)))
+                self.tensors[k][-2,:,:,-2] = ID
+                self.tensors[k][-1,:,:,-1] = ID
+            elif k == j:
+                if k==N-1:
+                    self.tensors[k] = np.pad(self.tensors[k],((0,2),(0,0),(0,0),(0,0)))
+                    self.tensors[k][-2,:,:,0] = r*Wsi
+                    self.tensors[k][-1,:,:,0] = Ni
+                else:
+                    self.tensors[k] = np.pad(self.tensors[k],((0,2),(0,0),(0,0),(0,1)))
+                    self.tensors[k][-2,:,:,-1] = r*Wsi
+                    self.tensors[k][-1,:,:,-1] = Ni
+            elif k > j:
+                if k == N-1:
+                    self.tensors[k] = np.pad(self.tensors[k],((0,1),(0,0),(0,0),(0,0)))
+                    self.tensors[k][-1,:,:,0] = ID
+                else:
+                    self.tensors[k] = np.pad(self.tensors[k],((0,1),(0,0),(0,0),(0,1)))
+                    self.tensors[k][-1,:,:,-1] = ID
+        return
+        
+        
+
 class occupancy_MPO(MPO):
     ''' Builds MPO for the occupancy in the MPS whose expectation values gives
         the expected number of occupied sites in the chain 

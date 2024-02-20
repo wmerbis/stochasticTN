@@ -9,6 +9,7 @@ import numpy as np
 from stochasticTN.mps import MPS
 from stochasticTN.mpo import MPO
 from stochasticTN.linalg import svd
+from scipy.stats import entropy
 from typing import Any, Optional, List
 
 def ContractBraKet(ket, bra):
@@ -207,7 +208,9 @@ def MPSMPOcontraction(mps: MPS, mpo: MPO,
 def MPOMPOcontraction(mpo1: MPO, mpo2: MPO, 
                       renormalize: Optional[bool] = False,
                       Dmax: Optional[int] = None,
-                      cutoff: Optional[float] = 0):
+                      cutoff: Optional[float] = 0,
+                      breaker: Optional[bool] = False,
+                      computeEE: Optional[bool] = False):
     '''
     Contracts mpo with another mpo site by site and optionaly performs trunctation on the singular value
     spectrum. 
@@ -218,6 +221,7 @@ def MPOMPOcontraction(mpo1: MPO, mpo2: MPO,
         renormalize: if True the output mps will be renormalized with specified cutoff and/or maximal bond dimension
         Dmax: optional maximal bond dimension
         cutoff: optional cutoff on the singular value spectrum
+        breaker: optional boolian; if True then the algorithm raises an error when Dmax is reached
         
     Returns:
         mpo: Output MPO object
@@ -242,9 +246,12 @@ def MPOMPOcontraction(mpo1: MPO, mpo2: MPO,
                 
         if renormalize and i<N-1:
             u, s, v, e = svd(ttemp, -1, Dmax, cutoff, True)
+            if breaker and len(s) == Dmax:
+                raise ValueError("Maximal bond dimension reached")
             err += e
             tensors[i] = u
             sv = np.tensordot(np.diag(s), v, axes =[1,0])
+            
             
         else:
             tensors[i] = ttemp
@@ -253,10 +260,25 @@ def MPOMPOcontraction(mpo1: MPO, mpo2: MPO,
     mpo.r = mpo1.r
     mpo.s = mpo1.s
     
+    if renormalize and computeEE:
+        mpo.center = N-1
+        e = mpo.position(N//2-1,True, Dmax, cutoff)
+        err+=e
+        
+        Tens = np.tensordot(mpo.tensors[N//2-1], mpo.tensors[N//2] , axes=[3,0] )
+        u, s, v, e = svd(Tens, 3, normalizeSVs = False, cutoff = cutoff)
+        p = s**2
+        EE = entropy(p, base = 2)
+        e = mpo.position(0, True, Dmax, cutoff)
+        err+=e
+        return mpo, err, EE
+    
     if renormalize:
         mpo.center = N-1
         e = mpo.position(0, True, Dmax, cutoff) 
         err += e
+        
+
         
     return mpo, err
     
@@ -372,4 +394,56 @@ def single_site_magnetization(mps: MPS, site: int, norm: Optional[bool] = True):
     return np.trace(PIcont)/norm
 
 
+def full_matrix(mpo: MPO):
+    '''
+    Contract the mpo to build the full matrix. Only possible for len(mpo) < 28
+    '''
+    n = len(mpo)
+    if n>=28:
+        raise ValueError("MPO too large to contract exactly...")
+    
+    Q = mpo.tensors[0]
+    for i in range(1, n):
+        Q = np.tensordot(Q, mpo.tensors[i], axes = [-1,0])
+    tp = tuple([2*i+1 for i in range(n+1)])+tuple([2*i for i in range(n+1)])
+    return Q.transpose(tp).reshape((2**n, 2**n))
+    
+    
+def full_distribution(mps, norm = 0):
+    '''
+    Contract mps to get the full distribution over all configurations. Only possible for len(mps)<28
+    '''
+    n = len(mps)
+    if n>=28:
+        raise ValueError("MPS too large to contract exactly...")
+    
+    if norm ==0:
+        norm = mps.norm()
+        
+    P = mps.tensors[0]
+    for i in range(1, n):
+        P = np.tensordot(P, mps.tensors[i], axes = [-1,0])
+    
+    return P.reshape(2**n)/norm
+    
+    
+    
+def marginal(mps, sites, norm = 0):
+    '''
+    Computes the marginal distribution over the sites specified in `sites`
+    '''
+    n = len(mps)
+    if norm == 0:
+        norm = mps.norm()
+    
+    flat = np.ones(2)
+    tens = np.ones(1)
+    for i in range(len(mps)):
+        if i in sites:
+            tens = np.tensordot(tens, mps.tensors[i], axes = [-1,0])
+        else:
+            marg = np.tensordot(mps.tensors[i], flat, axes = [1,0])
+            tens = np.tensordot(tens, marg, axes = [-1,0])
+    
+    return tens.flatten()/norm  
     

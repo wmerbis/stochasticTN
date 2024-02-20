@@ -45,6 +45,13 @@ class DMRG:
         self.Rs = {len(mps) - 1: right_bdy}
         self.cx = cx
     
+    def get_bra(self, ket):
+        if self.cx == 'stoch':
+            return ket
+        elif self.cx == 'complex':
+            return np.conj(ket)
+        else:
+            raise ValueError("cx type not supported, try cx = 'stoch' or 'complex' ")
    
     def add_R(self, site):
         ''' Adds a single right environment for `site` given that the environment to the 
@@ -52,7 +59,7 @@ class DMRG:
         '''
         nextR = np.tensordot(self.mps.tensors[site+1],self.Rs[site+1], axes=[2,0])
         nextR = np.tensordot(self.mpo.tensors[site+1],nextR, axes = ([2,3],[1,2]))
-        nextR = np.tensordot(np.conj(self.mps.tensors[site+1]),nextR, axes = ([1,2],[1,3]))
+        nextR = np.tensordot(self.get_bra(self.mps.tensors[site+1]),nextR, axes = ([1,2],[1,3]))
         self.Rs[site] = np.transpose(nextR, (2,1,0))
         
     def compute_Rs(self):
@@ -71,7 +78,7 @@ class DMRG:
         '''
         nextL = np.tensordot(self.Ls[site-1], self.mps.tensors[site-1], axes = [0,0])
         nextL = np.tensordot(nextL, self.mpo.tensors[site-1], axes = ([0,2],[0,2]))
-        self.Ls[site] = np.tensordot(nextL, np.conj(self.mps.tensors[site-1]), axes = ([0,2],[0,1]))
+        self.Ls[site] = np.tensordot(nextL, self.get_bra(self.mps.tensors[site-1]), axes = ([0,2],[0,1]))
         
     def compute_Ls(self):
         ''' Compute the left environments for each site left off (and including) 
@@ -167,7 +174,7 @@ class DMRG:
         Weff = LinearOperator((vecshape,vecshape), 
                               matvec= lambda x: self.single_site_matvec(x,self.Rs[site],self.Ls[site],self.mpo.tensors[site]) )
         try:
-            if self.cx == 'stoch':
+            if self.cx == 'stoch' :
                 ev0, Rev = eigs(Weff,k=1,which='LR', v0=bk, tol=tol, ncv = ncv)
                 Rev = Rev.real
                 ev0 = ev0.real
@@ -198,7 +205,8 @@ class DMRG:
                           tol: Optional[float] = 1e-10,
                           Dmax: Optional[int] = None,
                           cutoff: Optional[float] = 0,
-                          ncv: Optional[int] = None):
+                          ncv: Optional[int] = None,
+                         verbose: Optional[bool] = False):
         ''' Implements a single site sweep of the DMRG algorithm. Sweeps from mps.center tot the right, 
             followed by a left sweep and again a right sweep back to mps.center.
         
@@ -221,20 +229,20 @@ class DMRG:
             ev0, err = self.optimize_single_site(i,'right',
                              tol = tol, Dmax = Dmax, cutoff = cutoff, ncv = ncv)           
             truncation_error += err
-            
-            stdout.write(f"\rVarMPS site={i}/{N}: "
+            if verbose:
+                stdout.write(f"\rVarMPS site={i}/{N}: "
                      f"optimized E={ev0[0].real}, D = {self.mps.tensors[i].shape[2]},   truncated SVs = {err} ")
-            stdout.flush()
+                stdout.flush()
             
     #     Sweep to left-most node
         for i in range(N-1,0,-1):
             ev0, err = self.optimize_single_site(i,'left',
                              tol = tol, Dmax = Dmax, cutoff = cutoff, ncv = ncv)           
             truncation_error += err
-
-            stdout.write(f"\rVarMPS site={i}/{N}: "
+            if verbose:
+                stdout.write(f"\rVarMPS site={i}/{N}: "
                      f"optimized E={ev0[0].real}, D = {self.mps.tensors[i].shape[0]},   truncated SVs = {err} ")
-            stdout.flush()
+                stdout.flush()
 
         #Final update left-most node if site = 0, final right sweep up to site if site is non-zero 
         if site == 0:
@@ -247,20 +255,20 @@ class DMRG:
             Rev = Rev.real
             Rev = Rev/Rev.sum()
             self.mps.tensors[0] = np.reshape(Rev, sh)
-            
-            stdout.write(f"\rVarMPS site={0}/{N}: "
+            if verbose:
+                stdout.write(f"\rVarMPS site={0}/{N}: "
                      f"optimized E={ev0[0].real}, D = {self.mps.tensors[0].shape[0]},   truncated SVs = {0} ")
-            stdout.flush()
+                stdout.flush()
             
         else:
             for i in range(0,site):
                 ev0, err = self.optimize_single_site(i,'right',
                                  tol = tol, Dmax = Dmax, cutoff = cutoff, ncv = ncv)           
                 truncation_error += err
-
-                stdout.write(f"\rVarMPS site={i}/{N}: "
+                if verbose:
+                    stdout.write(f"\rVarMPS site={i}/{N}: "
                          f"optimized E={ev0[0].real}, D = {self.mps.tensors[i].shape[2]},   truncated SVs = {err} ")
-                stdout.flush()                
+                    stdout.flush()                
 
     #     if ev0.imag > 1e-14 :
     #         print("Imaginary eigenvalue: ", ev0.imag)
@@ -273,7 +281,8 @@ class DMRG:
                              tol: Optional[float] = 1e-10,
                              Dmax: Optional[int] = None,
                              cutoff: Optional[float] = 0,
-                             ncv: Optional[int] = None):
+                             ncv: Optional[int] = None,
+                             verbose: Optional[bool] = False):
         ''' Runs the single site DMRG algorithm until convergence (or for 'MaxSweeps' number of sweeps)   
         
         Args:
@@ -305,15 +314,15 @@ class DMRG:
         start_time=time.time()
         
         while not converged:
-            en, err = self.single_site_sweep(tol, Dmax, cutoff, ncv)
+            en, err = self.single_site_sweep(tol, Dmax, cutoff, ncv, verbose = False)
             truncation_error += err
             
-            norm = self.mps.norm()
+            norm = self.mps.norm(self.cx)
             if self.mpo.s == 0:
-                energy = MPOexpectation(self.mps, density_mpo, 'stoch')/norm/N
+                energy = MPOexpectation(self.mps, density_mpo, self.cx)/norm/N
             else:
-                energy = MPOexpectation(self.mps, self.mpo, 'stoch')/norm
-                variance = abs(MPOvariance(self.mps, self.mpo, 'stoch')/norm - energy**2)
+                energy = MPOexpectation(self.mps, self.mpo, self.cx)/norm
+                variance = abs(MPOvariance(self.mps, self.mpo, self.cx)/norm - energy**2)
             
             if variance < accuracy and self.mpo.s != 0 and num_sweeps>0:
                 converged = True
@@ -324,19 +333,19 @@ class DMRG:
             final_energy = energy
             num_sweeps += 1
             if num_sweeps >= MaxSweeps and not converged:
-                print(f"\nMaxSweeps {num_sweeps} reached before convergence to desired accuracy")
+                print(f"MaxSweeps {num_sweeps} reached before convergence to desired accuracy")
                 break
         
         if self.mpo.s == 0:
-            variance = 1/N**2*MPOvariance(self.mps, density_mpo, 'stoch')/norm-final_energy**2
+            variance = 1/N**2*MPOvariance(self.mps, density_mpo, self.cx)/norm-final_energy**2
         
         end_time=time.time()
         compt = end_time - start_time
         
-        if self.mpo.s == 0:
-            print('\nr = %.3f,    n = %2i,    FE = %.9f,    delFE = %.9f    tps = %.2fs    <D>= %.2f   maxD = %i' %(self.mpo.r, num_sweeps, energy, variance, compt/num_sweeps, np.mean(self.mps.bond_dimensions[1:-1]), max(self.mps.bond_dimensions) ))
-        else:
-            print('\ns = %.6f,    n = %2i,    FE = %.9f,    delFE = %.9f    tps = %.2fs    <D>= %.2f   maxD = %i' %(self.mpo.s, num_sweeps, energy, variance, compt/num_sweeps, np.mean(self.mps.bond_dimensions[1:-1]), max(self.mps.bond_dimensions) ))
+        if self.mpo.s == 0 and verbose:
+            print('r = %.3f,    n = %2i,   dens = %.9f,   var = %.9f    tps = %.2fs    <D>= %.2f   maxD = %i' %(self.mpo.r, num_sweeps, energy, variance, compt/num_sweeps, np.mean(self.mps.bond_dimensions[1:-1]), max(self.mps.bond_dimensions) ))
+        elif verbose:
+            print('s = %.6f,    n = %2i,    FE = %.9f,    delFE = %.9f    tps = %.2fs    <D>= %.2f   maxD = %i' %(self.mpo.s, num_sweeps, energy, variance, compt/num_sweeps, np.mean(self.mps.bond_dimensions[1:-1]), max(self.mps.bond_dimensions) ))
         
         return final_energy, variance, truncation_error, converged
     
@@ -382,7 +391,8 @@ class DMRG:
             else:
                 ev0, Rev = eigsh(Weff,k=1,which='LA', v0=bk, tol=tol, ncv = ncv)
         except (ArpackNoConvergence, ArpackError) as e:
-            print(f"\nAn {e} exception occurred for the eigenvector at sites {site}, {site+1}")
+            print(e)
+            print(f"\nAn exception occurred for the eigenvector at sites {site}, {site+1}")
             Rev = bk
             ev0 = np.array([1e100])
         
@@ -408,7 +418,8 @@ class DMRG:
                           tol: Optional[float] = 1e-10,
                           Dmax: Optional[int] = None,
                           cutoff: Optional[float] = 1e-16,
-                          ncv: Optional[int] = None):
+                          ncv: Optional[int] = None,
+                          verbose: Optional[bool] = False):
         ''' Implements a double site sweep of the DMRG algorithm
         
         Args:
@@ -431,37 +442,39 @@ class DMRG:
         for i in range(site,N-1):
             ev0, err = self.optimize_double_site(i, 'right', tol, Dmax, cutoff, ncv)
             truncation_error += err
-            
-            stdout.write(f"\rVarMPS sites=({i},{i+1})/{N}: "
+            if verbose:
+                stdout.write(f"\rVarMPS sites=({i},{i+1})/{N}: "
                          f"optimized E={ev0[0].real}, D = {self.mps.tensors[i].shape[2]},  truncated SVs = {err}  ")
-            stdout.flush()
+                stdout.flush()
 
     #     Sweep to left-most node
         for i  in range(N-2,-1,-1):
             ev0, err = self.optimize_double_site(i, 'left', tol, Dmax, cutoff, ncv)
             truncation_error += err
-            
-            stdout.write(f"\rVarMPS sites=({i},{i+1})/{N}: "
+            if verbose:
+                stdout.write(f"\rVarMPS sites=({i},{i+1})/{N}: "
                          f"optimized E={ev0[0].real}, D = {self.mps.tensors[i].shape[2]},  truncated SVs = {err}  ")
-            stdout.flush()
+                stdout.flush()
             
         for i  in range(0,site):
             ev0, err = self.optimize_double_site(i, 'right', tol, Dmax, cutoff, ncv)
             truncation_error += err
             
-            stdout.write(f"\rVarMPS sites=({i},{i+1})/{N}: "
+            if verbose:
+                stdout.write(f"\rVarMPS sites=({i},{i+1})/{N}: "
                          f"optimized E={ev0[0].real}, D = {self.mps.tensors[i].shape[2]},  truncated SVs = {err}  ")
-            stdout.flush()
+                stdout.flush()
             
         return ev0[0].real, truncation_error
     
     def run_double_site_dmrg(self,
                              MaxSweeps: Optional[int] = 20,
                              accuracy: Optional[float] = 1e-8,
-                             tol: Optional[float] = 1e-10,
+                             tol: Optional[float] = 1e-12,
                              Dmax: Optional[int] = None,
                              cutoff: Optional[float] = 0,
-                             ncv: Optional[int] = None):
+                             ncv: Optional[int] = None,
+                             verbose: Optional[bool] = False):
         ''' Runs the double site DMRG algorithm until convergence (or for 'MaxSweeps' number of sweeps)
             Convergence is reached when the variance in the leading eigenvalue of the tilted generator is lower than 'accuracy', 
             unless tilting parameter s = 0, then the convergence criteria is based on the total density in the chain.
@@ -486,24 +499,24 @@ class DMRG:
         truncation_error = 0
         if self.mpo.s == 0:
             density_mpo = occupancy_MPO(N)
-            final_energy = MPOexpectation(self.mps, density_mpo, 'stoch')/self.mps.norm()/N
+            final_energy = MPOexpectation(self.mps, density_mpo, self.cx)/self.mps.norm(self.cx)/N
         else:
-            final_energy = MPOexpectation(self.mps, self.mpo, 'stoch')/self.mps.norm()
+            final_energy = MPOexpectation(self.mps, self.mpo, self.cx)/self.mps.norm(self.cx)
             
         self.compute_Rs()
         self.compute_Ls()
         start_time=time.time()
         
         while not converged:
-            en, err = self.double_site_sweep(tol, Dmax, cutoff, ncv)
+            en, err = self.double_site_sweep(tol, Dmax, cutoff, ncv, verbose)
             truncation_error += err
             
-            norm = self.mps.norm()
+            norm = self.mps.norm(self.cx)
             if self.mpo.s == 0:
-                energy = MPOexpectation(self.mps, density_mpo, 'stoch')/norm/N
+                energy = MPOexpectation(self.mps, density_mpo, self.cx)/norm/N
             else:
-                energy = MPOexpectation(self.mps, self.mpo, 'stoch')/norm
-                variance = abs(MPOvariance(self.mps, self.mpo, 'stoch')/norm - energy**2)
+                energy = MPOexpectation(self.mps, self.mpo, self.cx)/norm
+                variance = abs(MPOvariance(self.mps, self.mpo, self.cx)/norm - energy**2)
             
             if variance < accuracy and self.mpo.s != 0:
                 converged = True
@@ -518,14 +531,14 @@ class DMRG:
                 break
         
         if self.mpo.s == 0:
-            variance = 1/N**2*MPOvariance(self.mps, density_mpo, 'stoch')/norm-final_energy**2
+            variance = 1/N**2*MPOvariance(self.mps, density_mpo, self.cx)/norm-final_energy**2
             
         end_time=time.time()
         compt = end_time - start_time
         
-        if self.mpo.s == 0:
-            print('\nr = %.6f,    n = %2i,    FE = %.9f,    delFE = %.9f    tps = %.2fs    <D>= %.2f   maxD = %i' %(self.mpo.r, num_sweeps, final_energy, variance, compt/num_sweeps, np.mean(self.mps.bond_dimensions[1:-1]), max(self.mps.bond_dimensions) ))
-        else:
-            print('\ns = %.6f,    n = %2i,    FE = %.9f,    delFE = %.9f    tps = %.2fs    <D>= %.2f   maxD = %i' %(self.mpo.s, num_sweeps, final_energy, variance, compt/num_sweeps, np.mean(self.mps.bond_dimensions[1:-1]), max(self.mps.bond_dimensions) ))
+        if self.mpo.s == 0 and verbose:
+            print('\nr = %.6f,   n_s = %2i,   dens = %.9f,   var = %.9f   tps = %.2fs   <D>= %.2f   maxD = %i' %(self.mpo.r, num_sweeps, final_energy, variance, compt/num_sweeps, np.mean(self.mps.bond_dimensions[1:-1]), max(self.mps.bond_dimensions) ))
+        elif verbose:
+            print('\ns = %.6f,   n_s = %2i,   FE = %.9f,   delFE = %.9f   tps = %.2fs   <D>= %.2f   maxD = %i' %(self.mpo.s, num_sweeps, final_energy, variance, compt/num_sweeps, np.mean(self.mps.bond_dimensions[1:-1]), max(self.mps.bond_dimensions) ))
         
         return final_energy, variance, truncation_error, converged
