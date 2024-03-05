@@ -7,7 +7,7 @@
 
 import numpy as np
 from stochasticTN.mps import MPS
-from stochasticTN.mpo import MPO
+from stochasticTN.mpo import MPO, project_on_k_infected
 from stochasticTN.linalg import svd
 from scipy.stats import entropy
 from typing import Any, Optional, List
@@ -447,14 +447,16 @@ def marginal(mps, sites, norm = 0):
     
     return tens.flatten()/norm  
 
-def compute_pk_infected(mps, canonicalize=False):
+def compute_pk_infected(mps, norm=0, canonicalize=False):
     ''' 
     Compute the probability distribution of having exactly k infected, as a function of k
     '''
     n = len(mps)
     pn = np.zeros(n+1)
-    norm = mps.norm()
+    if norm == 0:
+        norm = mps.norm()
+        
     for k in range(n+1):
         mpo_k = project_on_k_infected(n,k,canonicalize)
-        pn[k] = stn.MPOexpectation(mps,mpo_k)/norm
+        pn[k] = MPOexpectation(mps,mpo_k)/norm
     return pn
