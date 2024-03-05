@@ -404,3 +404,112 @@ class gapMPO(MPO):
         tensors[N-1] = R
         
         super().__init__(tensors = tensors)
+        return
+        
+class project_on_k_infected(MPO):
+    '''Builds MPO which projects on all configurations with k infected (occupied) nodes
+    '''
+    def __init__(self, N: int, k: int, canonicalize=False):
+        d=2
+        Ni = np.array([ [0, 0], [0, 1] ])
+        Vi = np.array([ [1, 0], [0, 0] ])
+#         ID = np.array([[1,0],[0,1]])
+        
+        if k>N:
+            raise ValueError("k cannot be larger than N")
+        elif k == 0:
+            tensors = N*[np.reshape(Vi, (1,2,2,1))]
+            super().__init__(tensors = tensors)
+            return
+        elif k == N:
+            tensors = N*[np.reshape(Ni, (1,2,2,1))]
+            super().__init__(tensors = tensors)
+            return
+        elif k > N/2:
+            tensors = project_on_k_healthy(N,N-k,canonicalize).tensors
+            super().__init__(tensors = tensors)
+            return 
+        
+        Dw = k+1
+        L = np.zeros([1,d,d,Dw])
+        A = np.zeros([Dw,d,d,Dw])
+        R = np.zeros([Dw,d,d,1])
+
+        L[0,:,:,k-1] = Ni
+        L[0,:,:,k] = Vi
+
+        R[0,:,:,0] = Vi
+        R[1,:,:,0] = Ni
+
+        A[:,:,:,0] = R[:,:,:,0]
+        A[-1,:,:,:] = L[0,:,:,:]
+        for n in range(1,Dw-1):
+#             print(n)
+            A[n,:,:,n] = Vi
+            A[n+1,:,:,n] = Ni
+
+        tensors = [None]*N
+        tensors[0] = L
+        for i in range(1,N-1):
+            tensors[i] = A
+        tensors[N-1] = R
+        
+        super().__init__(tensors = tensors)
+        if canonicalize:
+            self.canonicalize(normalize_SVs=False)
+        
+        return
+
+class project_on_k_healthy(MPO):
+    '''Builds MPO which projects on all configurations with k healthy (empty) nodes
+    '''
+    def __init__(self, N: int, k: int, canonicalize=False):
+        d=2
+        Ni = np.array([ [0, 0], [0, 1] ])
+        Vi = np.array([ [1, 0], [0, 0] ])
+#         ID = np.array([[1,0],[0,1]])
+        
+        if k>N:
+            raise ValueError("k cannot be larger than N")
+        elif k == 0:
+            tensors = N*[np.reshape(Ni, (1,2,2,1))]
+            super().__init__(tensors = tensors)
+            return
+        elif k == N:
+            tensors = N*[np.reshape(Vi, (1,2,2,1))]
+            super().__init__(tensors = tensors)
+            return
+        elif k > N/2:
+            tensors = project_on_k_infected(N,N-k,canonicalize).tensors
+            super().__init__(tensors = tensors)
+            return 
+        
+        Dw = k+1
+        L = np.zeros([1,d,d,Dw])
+        A = np.zeros([Dw,d,d,Dw])
+        R = np.zeros([Dw,d,d,1])
+
+        L[0,:,:,k-1] = Vi
+        L[0,:,:,k] = Ni
+
+        R[0,:,:,0] = Ni
+        R[1,:,:,0] = Vi
+
+        A[:,:,:,0] = R[:,:,:,0]
+        A[-1,:,:,:] = L[0,:,:,:]
+        for n in range(1,Dw-1):
+#             print(n)
+            A[n,:,:,n] = Ni
+            A[n+1,:,:,n] = Vi
+
+        tensors = [None]*N
+        tensors[0] = L
+        for i in range(1,N-1):
+            tensors[i] = A
+        tensors[N-1] = R
+        
+        super().__init__(tensors = tensors)
+        if canonicalize:
+            self.canonicalize(normalize_SVs=False)
+        
+        return

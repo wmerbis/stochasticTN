@@ -10,6 +10,7 @@
 import numpy as np
 from stochasticTN.mps import MPS
 from stochasticTN.linalg import svd
+from stochasticTN.operations import marginal
 from scipy.stats import entropy
 import matplotlib.pyplot as plt
 from typing import Optional
@@ -38,7 +39,7 @@ def ShannonE(mps: MPS, base: Optional[float] = 2) -> float:
         px = np.tensordot(px, mps.tensors[i], axes=[-1,0])
     
     px = np.trace(px, axis1 = 0, axis2 = -1 )
-    px = np.reshape(px, d**N)
+    px = np.reshape(px.real, d**N)
     if mps.norm() < 0:
         px = -px
     negprob = px[px<0].sum()
@@ -76,7 +77,7 @@ def mutual_information(mps: MPS, site: int, SE: Optional[float] = 0, base: Optio
     for i in range(site, -1,-1):
         ketR = np.tensordot(mps.tensors[i], ketR, axes=[2,0])
     ketR = np.trace(ketR, axis1 = 0, axis2 = -1)
-    ketR= np.reshape(ketR, d**(site+1))
+    ketR= np.reshape(ketR.real, d**(site+1))
     if norm < 0:
         ketR = -ketR
     negprob += ketR[ketR<0].sum()
@@ -90,7 +91,7 @@ def mutual_information(mps: MPS, site: int, SE: Optional[float] = 0, base: Optio
     for i in range(site+1,N):
         ketL = np.tensordot(ketL, mps.tensors[i], axes = [-1,0])
     ketL = np.trace(ketL, axis1=0, axis2=-1)
-    ketL = np.reshape(ketL, d**(N-site-1))
+    ketL = np.reshape(ketL.real, d**(N-site-1))
 
     if norm < 0:
         ketL = -ketL
@@ -168,8 +169,8 @@ def second_Renyi_entropy(mps: MPS, norm: Optional[float] = 0, base: Optional[flo
     '''
     
     if norm == 0:
-        norm = mps.norm(1)
-    p2 = mps.norm(2)**2/norm**2
+        norm = mps.norm()
+    p2 = mps.norm('complex')**2/norm**2
     return - np.log(p2)/np.log(base)
 
 
@@ -258,5 +259,24 @@ def second_Renyi_MI(mps: MPS, site: int,
         SREEright = second_Renyi_EE(mps, site, norm, base, 'R')
         
     return SREEleft + SREEright - SRE 
+
+def MI_matrix(mps: MPS, norm: Optional[float]=0):
     
+    ''' Compute pairwise matrix of mutual information between sites in the MPS
+    
+    '''
+    if norm == 0:
+        norm = mps.norm()
+    
+    n = len(mps)
+    Hmarginals=[]
+    for i in range(n):
+        Hmarginals.append(entropy(marginal(mps,[i], norm)))
+    
+    MImatrix = np.zeros((n,n))
+    for i in range(n):
+        for j in range(i+1,n):
+            MImatrix[i,j] = Hmarginals[i]+Hmarginals[j] - entropy(marginal(mps, [i,j]).flatten())
+            MImatrix[j,i] = MImatrix[i,j]
+    return MImatrix
     
