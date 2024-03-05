@@ -446,4 +446,15 @@ def marginal(mps, sites, norm = 0):
             tens = np.tensordot(tens, marg, axes = [-1,0])
     
     return tens.flatten()/norm  
-    
+
+def compute_pk_infected(mps, canonicalize=False):
+    ''' 
+    Compute the probability distribution of having exactly k infected, as a function of k
+    '''
+    n = len(mps)
+    pn = np.zeros(n+1)
+    norm = mps.norm()
+    for k in range(n+1):
+        mpo_k = project_on_k_infected(n,k,canonicalize)
+        pn[k] = stn.MPOexpectation(mps,mpo_k)/norm
+    return pn
