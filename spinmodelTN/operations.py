@@ -18,7 +18,8 @@ def generate_random_pairwise_model(n, k, beta=0):
         beta: temperature, if left unspecified all Js will be chosen at random
     
     Returns
-        
+        mus: List of interaction terms indicating which spins appear in the term 
+        Js:  List of coupling constants 
     
     '''
     mus = k*[None]
@@ -36,6 +37,20 @@ def generate_random_pairwise_model(n, k, beta=0):
     return mus, Js
 
 def generate_random_spinmodel(n, k, max_order = 8, beta = 0):
+    '''
+    Generate a random spin model with higher order terms up to max_order
+    
+    Args:
+        n: Number of spins
+        k: Number of interaction terms
+        max_order: maximal order of the interaction terms
+        beta: temperature, if left unspecified all Js will be chosen at random
+    
+    Returns
+        mus: List of interaction terms indicating which spins appear in the term 
+        Js:  List of coupling constants 
+    
+    '''
     mus = k*[None]
     if beta == 0:
         Js = k*[None]
@@ -49,11 +64,32 @@ def generate_random_spinmodel(n, k, max_order = 8, beta = 0):
     return mus, Js
 
 def generate_spin_model_from_graph(G, beta):
+    '''
+    Generate the interaction terms for a pairwise spin model from a networkx graph G
+    
+    Args:
+        G: networkx graph object
+        beta: temperature
+    
+    Returns
+        mus: List of interaction terms indicating which spins appear in the term 
+        Js:  List of coupling constants 
+    
+    '''
     mus = list(G.edges)
     Js = [beta for _ in range(len(mus))]
     return mus, Js
 
-def emperical_dist(samples, n):
+def empirical_dist(samples, n):
+    ''' Create empirical distribution from a list of spin samples
+    
+    Args:
+        samples: list of spin samples as integers
+        n: number of spins
+        
+    Returns:
+        emp_dist: empirical distribution over all 2**n spin configurations
+    '''
     emp_dist = np.zeros(2**n)
     ns, c = np.unique(samples, return_counts = True)
     emp_dist[ns] = c / np.sum(c)
@@ -69,6 +105,7 @@ def int_to_sample(num, width=None):
 
 
 def mus_to_matrix(mus, n):
+    ''' Converts a list of interaction terms mus to a matrix'''
     matrix = np.zeros((n,len(mus)), dtype=int)
     for m, mu in enumerate(mus):
         if type(mu) == set:
@@ -77,6 +114,7 @@ def mus_to_matrix(mus, n):
     return matrix
 
 def matrix_to_mus(matrix):
+    ''' Inverse of mus_to_matrix, converts a matrix back into a list of interaction terms'''
     if type(matrix) != np.ndarray:
         matrix = np.array(matrix)
     
@@ -87,8 +125,11 @@ def matrix_to_mus(matrix):
     return mus
 
 def row_reduction(input_mat):
-    # Function to perform row reduction over F2 (binary field) for a NumPy array
-    # Returns the row-reduced matrix and the basis transformation
+    '''Function to perform row reduction over F2 (binary field) for a NumPy array
+    
+    Returns the row-reduced matrix and the basis transformation
+    '''
+
     matrix = input_mat.copy()
     
     if type(matrix) == list:
@@ -125,6 +166,8 @@ def row_reduction(input_mat):
     return matrix, basis_transformation
 
 def get_maps(matrix, result, basis_transformation):
+    ''' Create a dictionary of the forward and backwards spin basis transformation
+    '''
     num_rows, num_cols = matrix.shape
 
     backward_map = {i: np.where(trans==1)[0] for i, trans in enumerate(basis_transformation.transpose())}
@@ -149,7 +192,7 @@ def get_maps(matrix, result, basis_transformation):
 
 
 def mus_to_L(n, mus, Js):
-    
+    ''' Create a graph Laplacian out of a set of interaction terms mus and their couplings Js'''
     L = np.zeros((n,n))
     for n, mu in enumerate(mus):
         for i in mu:
@@ -162,6 +205,8 @@ def mus_to_L(n, mus, Js):
 
 
 def find_permutation_connected(L):
+    ''' Find the permutation which minimizes the distance in a one-dimensional projection of the spin model  
+    '''
     n = L.shape[0]
     evs, evex = eigsh(L, 2, which='SM')
     FiedlerEV = evex[:,1]
@@ -170,7 +215,8 @@ def find_permutation_connected(L):
     return permutation
 
 def find_permutation_nx(G):
-    
+    ''' Find the optimal permutation based on a networkx graph G
+    '''
     n = len(G)
     permutation = []
     for component in nx.connected_components(G):
@@ -191,6 +237,8 @@ def find_permutation_nx(G):
 
 
 def Fiedlermapping(n,mus, Js):
+    '''Find the permutation which maps to the optimal ordering of spins in the MPS 
+    '''
     L = mus_to_L(n, mus, Js)
     
     A = -L.copy()
@@ -209,7 +257,9 @@ def Fiedlermapping(n,mus, Js):
     return permutation, perm_map
 
 def optimize_spin_basis(n, mus, Js):
-    
+    ''' Optimize the spin basis by first performing a gauge transformation to the minimally complex model
+    and then optimizing the order of the transformed spins to minimize the correlation between them.
+    '''
     #Row reduce interactions to new spin basis
     matrix = mus_to_matrix(mus, n)
     result, basis_trafo = row_reduction(matrix)
@@ -236,6 +286,9 @@ def optimize_spin_basis(n, mus, Js):
 
 
 def perm_to_mus(mus,perm):
+    '''
+    Permute the interaction terms to the new ordering of spins
+    '''
     new_mus = []
     perm_map = {site: i for i, site in enumerate(perm)}
     for mu in mus:
@@ -245,7 +298,7 @@ def perm_to_mus(mus,perm):
 
 def permute2n(bw_map):
     '''
-    Constructs 2^n dimensional permutation matrix based on permuation of spins specified in the mapping `bw_map`
+    Constructs 2^n dimensional permutation matrix based on permutation of spins specified in the mapping `bw_map`
     
     Don't use for large n :)
     
