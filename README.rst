@@ -1,4 +1,5 @@
-Tensor Networks for Probabilistic Modeling
+#Tensor Networks for Probabilistic Modeling
+
 -------------------------------------
 
 Harvesting the power of tensor networks to represent high-dimensional probability distributions as Matrix Product States. 
