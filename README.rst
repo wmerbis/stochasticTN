@@ -1,4 +1,4 @@
-#Tensor Networks for Probabilistic Modeling
+# Tensor Networks for Probabilistic Modeling
 
 -------------------------------------
 
