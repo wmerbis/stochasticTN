@@ -22,17 +22,22 @@ def generate_random_pairwise_model(n, k, beta=0):
         Js:  List of coupling constants 
     
     '''
-    mus = k*[None]
+    mus = []
+    mu = np.random.choice([i for i in range(n)], 2, replace = False)
+
+    mus.append(np.sort(mu))
     
     if beta !=0:
         Js = k*[beta]
     else:
-        Js = k*[None]
-       
-    for mu in range(k):
-        mus[mu] = np.random.choice([i for i in range(n)], 2, replace = False)
-        if beta == 0:
-            Js[mu] = np.random.uniform(-1,1)
+        Js = np.random.uniform(-1,1, size = k)
+           
+    while len(mus)<k:
+        mu = np.random.choice([i for i in range(n)], 2, replace = False)
+        mu = np.sort(mu)
+        
+        if not np.any(np.all(mu == mus, axis=1)):
+            mus.append(mu)
         
     return mus, Js
 
