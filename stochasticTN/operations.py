@@ -10,6 +10,7 @@ from stochasticTN.mps import MPS
 from stochasticTN.mpo import MPO, project_on_k_infected
 from stochasticTN.linalg import svd
 from scipy.stats import entropy
+from scipy.sparse.linalg import eigsh
 from typing import Any, Optional, List
 
 def ContractBraKet(ket, bra):
@@ -90,6 +91,20 @@ def getbra(mps: MPS, cx: Optional[str] ='stoch'):
     else:
         bra = ket
     return bra
+
+def overlap(mps1: MPS, mps2: MPS):
+    ''' Compute the overlap between 2 mps, returns a float
+    '''
+    N = len(mps1)
+    N2 = len(mps2)
+    if N != N2:
+        raise ValueError("MPS's should be of same length!")
+    
+    o = np.ones((1,1))
+    for i in range(N):
+        o = np.tensordot(o, mps1.tensors[i], axes= [0,0])
+        o = np.tensordot(o, mps2.tensors[i], axes = [[0,1],[0,1]])
+    return o.reshape(1)[0]
 
 def MPOexpectation(mps: MPS, mpo: MPO, cx: Optional[str] ='stoch'):
     ''' Compute the expectation value of the MPO on a MPS
@@ -460,3 +475,21 @@ def compute_pk_infected(mps, norm=0, canonicalize=False):
         mpo_k = project_on_k_infected(n,k,canonicalize)
         pn[k] = MPOexpectation(mps,mpo_k)/norm
     return pn
+
+
+def find_permutation(L):
+    ''' 
+    Finds the optimal ordering which minimizes Mutual information distance between nodes of a network.
+    
+    Args:
+        L: numpy array containing the graph Laplacian
+    
+    Returns:
+        perm: list containing permutation which minimizes MI between nodes in a 1D array
+    
+    '''
+    n = L.shape[0]
+    evs, evex = eigsh(L, 2, which='SM')
+    FiedlerEV = evex[:,1]
+    return [i for _,i in sorted(zip(FiedlerEV.real,range(n)))]
+

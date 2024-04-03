@@ -516,15 +516,16 @@ class DMRG:
                 energy = MPOexpectation(self.mps, density_mpo, self.cx)/norm/N
             else:
                 energy = MPOexpectation(self.mps, self.mpo, self.cx)/norm
-                variance = abs(MPOvariance(self.mps, self.mpo, self.cx)/norm - energy**2)
+#                 variance = abs(MPOvariance(self.mps, self.mpo, self.cx)/norm - energy**2)
             
-            if variance < accuracy and self.mpo.s != 0:
-                converged = True
-            elif np.abs((final_energy - energy)/energy) < accuracy and self.mpo.s == 0:
-                converged = True
-            elif np.abs((final_energy - energy)/energy) < 1e-12:
+#             if variance < accuracy and self.mpo.s != 0:
+#                 converged = True
+#             elif np.abs((final_energy - energy)/energy) < accuracy and self.mpo.s == 0:
+#                 converged = True
+            if np.abs((final_energy - energy)/energy) < accuracy:
                 converged = True
             final_energy = energy
+            
             num_sweeps += 1
             if num_sweeps >= MaxSweeps and not converged:
                 print(f"\nMaxSweeps {num_sweeps} reached before convergence to desired accuracy")
@@ -532,6 +533,8 @@ class DMRG:
         
         if self.mpo.s == 0:
             variance = 1/N**2*MPOvariance(self.mps, density_mpo, self.cx)/norm-final_energy**2
+        else:
+            variance = abs(MPOvariance(self.mps, self.mpo, self.cx)/norm - energy**2)
             
         end_time=time.time()
         compt = end_time - start_time

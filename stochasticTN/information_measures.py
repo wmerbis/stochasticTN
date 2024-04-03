@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 from typing import Optional
 
 
-def ShannonE(mps: MPS, base: Optional[float] = 2) -> float:
+def ShannonE(mps: MPS, norm: Optional[float] = 0, base: Optional[float] = 2, verbose_thresh: Optional[float] = 0) -> float:
     ''' Computes the Shannon entropy of the MPS. 
     
     NOTE: This is exponentially costly as it constructs the full 2^N dimensional probability distribution.
@@ -31,26 +31,17 @@ def ShannonE(mps: MPS, base: Optional[float] = 2) -> float:
         Hx: Shannon entropy of MPS.
     
     '''
-    
-    d=mps.physical_dimensions[0]
-    N=len(mps)
-    px = mps.tensors[0]
-    for i in range(1,N):
-        px = np.tensordot(px, mps.tensors[i], axes=[-1,0])
-    
-    px = np.trace(px, axis1 = 0, axis2 = -1 )
-    px = np.reshape(px.real, d**N)
-    if mps.norm() < 0:
-        px = -px
+    px = mps.probabilities(norm = norm)
     negprob = px[px<0].sum()
     px = px[px>=0]
     Hx = entropy(px, base=base)
  
-    if negprob != 0:
+    if negprob < verbose_thresh:
         print("Amount of negative probability encountered in ShannonE: ", negprob)
     return Hx
 
-def mutual_information(mps: MPS, site: int, SE: Optional[float] = 0, base: Optional[float] = 2) -> float:
+def mutual_information(mps: MPS, site: int, SE: Optional[float] = 0, 
+                       base: Optional[float] = 2, verbose_thresh: Optional[float] = 0) -> float:
     ''' Computes the Mutual information (log base 2) between two sides of the MPS, separated to the right of 'site'.
    
     NOTE: This is exponentially costly as it constructs the full 2^N dimensional probability distribution
@@ -105,7 +96,7 @@ def mutual_information(mps: MPS, site: int, SE: Optional[float] = 0, base: Optio
     else:
         HLR = SE
      
-    if negprob != 0:
+    if negprob < verbose_thresh:
         print("Amount of negative probability encountered in Mutual Information: ", negprob)
 
     return HL + HR - HLR
@@ -167,9 +158,12 @@ def second_Renyi_entropy(mps: MPS, norm: Optional[float] = 0, base: Optional[flo
     Returns:
         H2: the second Renyi entorpy of the MPS
     '''
-    
+    if mps.center is None:
+        mps.canonicalize()
+        
     if norm == 0:
         norm = mps.norm()
+        
     p2 = mps.norm('complex')**2/norm**2
     return - np.log(p2)/np.log(base)
 
@@ -279,4 +273,21 @@ def MI_matrix(mps: MPS, norm: Optional[float]=0):
             MImatrix[i,j] = Hmarginals[i]+Hmarginals[j] - entropy(marginal(mps, [i,j]).flatten())
             MImatrix[j,i] = MImatrix[i,j]
     return MImatrix
+    
+def Oinformation(mps: MPS, norm: Optional[float]=0):
+    if norm == 0:
+        norm = mps.norm()
+    
+    n = len(mps)
+    SE = ShannonE(mps, norm)
+    Oinfo = (n-2)*SE
+    for i in range(n):
+        margi = marginal(mps,[i], norm)
+        margi[margi<0] = 0
+        Hi = entropy(margi, base =2)
+        margmini = marginal(mps, [j for j in range(n) if j != i],norm)
+        margmini[margmini<0]=0
+        Hmini = entropy(margmini, base =2)
+        Oinfo += Hi - Hmini
+    return Oinfo
     

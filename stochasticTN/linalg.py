@@ -1,4 +1,10 @@
-# Copyright 2023 stochasticTN Developers, GNU GPLv3
+#
+#
+#
+#
+#
+#
+""" Implementations of common TN operations for stochastic MPS """
 
 import numpy as np
 from typing import Any, Optional, List
@@ -28,13 +34,13 @@ def svd(tensor: np.ndarray,
     shape = tensor.shape
     left = np.prod(shape[:axis])
     right = np.prod(shape[axis:])
-    matrix = tensor.reshape((left, right))
+    matrix = np.reshape(tensor, (left, right))
     u, s, v = np.linalg.svd(matrix, full_matrices=False)
     if normalizeSVs:
         s /= s.sum()
     truncation_error = 0
     curD = len(s)
-    while s[-1] < cutoff:
+    while s[-1] <= cutoff:
         truncation_error += s[-1]
         curD -=1
         s = s[:curD]
@@ -48,6 +54,6 @@ def svd(tensor: np.ndarray,
         v = v[:Dmax,:]
         curD =Dmax
         
-    return u.reshape(shape[:axis]+(curD,)), s, v.reshape((curD,)+shape[axis:]), truncation_error
+    return np.reshape(u, shape[:axis]+(curD,)), s, np.reshape(v, (curD,)+shape[axis:]), truncation_error
 
 
