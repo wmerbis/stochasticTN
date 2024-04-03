@@ -22,10 +22,10 @@ class EnergyMPS(MPS):
         self.mus = mus
         self.Js = Js
 
-        gmps = self.individual_g(mus[0],Js[0],n)
+        gmps = individual_g(mus[0],Js[0],n)
         for k in range(1,len(mus)):
-            gnew = self.individual_g(mus[k],Js[k],n)
-            gmps = self.add_operator(gmps,gnew)
+            gnew = individual_g(mus[k],Js[k],n)
+            gmps = add_operator(gmps,gnew)
 
         emps = self.compute_eMPS(gmps)
         super().__init__(tensors = emps, canonicalize=False)
@@ -33,33 +33,6 @@ class EnergyMPS(MPS):
         if optimize:
             self.canonicalize(normalize_SVs = False, cutoff=cutoff)
             
-          
-
-    def individual_g(self,mu, J, n):
-        '''
-        Computes MPS representation of a single interaction term in the binary basis. By convention, the 
-        coupling strength is multiplies the first site in the interaction term.
-
-        Args:
-            mu: list of sites present in the interaction (don't give a binary bitstring!)
-            J: coupling strength of interaction term
-            n: number of spins
-
-        Returns:
-            g: list of MPS tensors of shape (1,2,1)
-
-        '''
-        one = np.array([0.,1.]).reshape(1,2,1)
-        zero = np.array([1.,0.]).reshape(1,2,1)
-        g = [None]*n
-        for i in range(n):
-            if i in mu:
-                g[i] = one
-            else:
-                g[i] = zero
-        g[min(mu)] = J*g[min(mu)]
-        return g
-
 
     def compute_eMPS(self, gMPS):
         '''
@@ -99,27 +72,94 @@ class EnergyMPS(MPS):
             e = np.tensordot(e, self.tensors[i], axes = (-1,0))
         return e.reshape(2**n)
 
-    def add_operator(self, g, g2):
-        n = len(g)
-        n2 = len(g2)
-        if n != n2:
-            raise ValueError("operators of different lengths cannot be added (for now)")
+def add_operator(g, g2, c = 1):
+    n = len(g)
+    n2 = len(g2)
+    if n != n2:
+        raise ValueError("operators of different lengths cannot be added (for now)")
 
-        gsum = [None]*n
-        for i in range(n):
-            g2sh = g2[i].shape
+    gsum = [None]*n
+    for i in range(n):
+        g2sh = g2[i].shape
 
-            if i == 0:
-                gsum[i] = np.pad(g[i], ((0,0),(0,0),(0,g2sh[2])))
-                gsum[i][:,:,-g2sh[2]:] = g2[i]
-            elif i == n-1:
-                gsum[i] = np.pad(g[i], ((0,g2sh[0]),(0,0),(0,0)))
-                gsum[i][-g2sh[0]:,:,:] = g2[i]
-            else:
-                gsum[i] = np.pad(g[i], ((0,g2sh[0]),(0,0),(0,g2sh[2])))
-                gsum[i][-g2sh[0]:,:,-g2sh[2]:] = g2[i]
+        if i == 0:
+            gsum[i] = np.pad(g[i], ((0,0),(0,0),(0,g2sh[2])))
+            gsum[i][:,:,-g2sh[2]:] = c*g2[i]
+        elif i == n-1:
+            gsum[i] = np.pad(g[i], ((0,g2sh[0]),(0,0),(0,0)))
+            gsum[i][-g2sh[0]:,:,:] = g2[i]
+        else:
+            gsum[i] = np.pad(g[i], ((0,g2sh[0]),(0,0),(0,g2sh[2])))
+            gsum[i][-g2sh[0]:,:,-g2sh[2]:] = g2[i]
+    
+    return gsum
 
-        return gsum
+def individual_g(mu, J, n):
+    '''
+    Computes MPS representation of a single interaction term in the binary basis. By convention, the 
+    coupling strength is multiplies the first site in the interaction term.
+
+    Args:
+        mu: list of sites present in the interaction (don't give a binary bitstring!)
+        J: coupling strength of interaction term
+        n: number of spins
+
+    Returns:
+        g: list of MPS tensors of shape (1,2,1)
+
+    '''
+    one = np.array([0.,1.]).reshape(1,2,1)
+    zero = np.array([1.,0.]).reshape(1,2,1)
+    g = [None]*n
+    for i in range(n):
+        if i in mu:
+            g[i] = one
+        else:
+            g[i] = zero
+    g[min(mu)] = J*g[min(mu)]
+    return g
+
+def Hadamard_transform(tensors):
+    H1 = np.array([[1,1],[1,-1]])
+    obsmps = len(tensors)*[None]
+    for i in range(len(tensors)):
+        obsmps[i] = np.tensordot(tensors[i], H1, axes = [1,0]).transpose(0,2,1)
+    return MPS(tensors = obsmps, canonicalize = False)
+
+
+def multiply_mps(mps, tensors, optimize=True, Dmax = None, cutoff=0):
+    n = len(mps)
+    n2 = len(tensors)
+    if n != n2:
+        raise ValueError("MPS's of different lengths")
+
+    prod_tensors = n*[None]
+    
+    for i, t in enumerate(mps.tensors):
+        ash = t.shape
+        bsh = tensors[i].shape
+        lshape = ash[0]*bsh[0]
+        rshape = ash[2]*bsh[2]
+
+
+        prod_tensors[i] = np.zeros((lshape,2,rshape))
+        prod_tensors[i][:,0,:] = np.tensordot( t[:,0,:], tensors[i][:,0,:], 
+                                         axes=((), ())).transpose(0,2,1,3).reshape(lshape,rshape)
+        prod_tensors[i][:,1,:] = np.tensordot( t[:,1,:], tensors[i][:,1,:], 
+                                         axes=((), ())).transpose(0,2,1,3).reshape(lshape,rshape)
+        if optimize:
+            if i>0:
+                prod_tensors[i] = np.tensordot(sv, prod_tensors[i], axes = [1,0])
+
+            if i<n-1:
+                prod_tensors[i], s, v , _ = svd(prod_tensors[i], 2, Dmax, cutoff, normalizeSVs=False)
+                sv = np.tensordot(np.diag(s), v, axes = [1,0])
+    prodmps = MPS(tensors=prod_tensors, canonicalize = False, center = n-1)
+    
+    if optimize:
+        prodmps.position(0, cutoff = cutoff, Dmax = Dmax, normalize_SVs = False)
+
+    return prodmps
 
 class SpinModelMPS(MPS):
     '''
@@ -157,15 +197,15 @@ class SpinModelMPS(MPS):
             tensi = self.single_term_mps(i, Dmax = Dmax, cutoff=cutoff)
             self.product_mps(tensi, optimize=optimize, Dmax = Dmax, cutoff=cutoff)
             
-        
-    def compute_Rs(self):
-        n = len(self)
-        flat = np.ones(2)
-        self.Rs = {n-1: np.ones(1)}
-#         self.Rs = {n-2: np.tensordot(self.tensors[n-1], flat, axes = [1,0])}
-        for i in range(n-2,-1,-1):
-            keti = np.tensordot(self.tensors[i+1], flat, axes = [1,0])
-            self.Rs[i] = np.tensordot(keti, self.Rs[i+1], axes = [1,0])
+# Moved to parent class        
+#     def compute_Rs(self):
+#         n = len(self)
+#         flat = np.ones(2)
+#         self.Rs = {n-1: np.ones(1)}
+# #         self.Rs = {n-2: np.tensordot(self.tensors[n-1], flat, axes = [1,0])}
+#         for i in range(n-2,-1,-1):
+#             keti = np.tensordot(self.tensors[i+1], flat, axes = [1,0])
+#             self.Rs[i] = np.tensordot(keti, self.Rs[i+1], axes = [1,0])
 
     
     def sample_to_int(self,b):
@@ -216,11 +256,11 @@ class SpinModelMPS(MPS):
         elif len(mu) == 0:
             pass
         else:
-            u, s, v, e = svd(t, 1, normalizeSVs=True, Dmax = Dmax, cutoff=cutoff)
+            u, s, v, e = svd(t, 1, normalizeSVs=False, Dmax = Dmax, cutoff=cutoff)
             intmpsterms = [u.reshape(1,2,s.shape[0])]
             tnext = np.tensordot(np.diag(s),v, axes = [1,0])
             for i in range(1,len(mu)-1):
-                u,s,v,e = svd(tnext, 2, normalizeSVs=True, Dmax = Dmax, cutoff=cutoff)
+                u,s,v,e = svd(tnext, 2, normalizeSVs=False, Dmax = Dmax, cutoff=cutoff)
                 intmpsterms.append(u)
                 tnext = np.tensordot(np.diag(s),v, axes = [1,0])
             intmpsterms.append(tnext.reshape(s.shape[0],2,1))
@@ -264,37 +304,16 @@ class SpinModelMPS(MPS):
                     self.tensors[i] = np.tensordot(sv, self.tensors[i], axes = [1,0])
                 
                 if i<n-1:
-                    self.tensors[i], s, v , _ = svd(self.tensors[i], 2, Dmax, cutoff)
+                    self.tensors[i], s, v , _ = svd(self.tensors[i], 2, Dmax, cutoff, normalizeSVs=False)
                     sv = np.tensordot(np.diag(s), v, axes = [1,0])
                     self.center = i+1
             
             
         if optimize:
-            self.position(0, cutoff = cutoff, Dmax = Dmax)
+            self.position(0, cutoff = cutoff, Dmax = Dmax, normalize_SVs = False)
 
         return
-    
-    def probabilities(self, norm = 0):
-        '''
-        Explicitly compute all probabilities from the MPS representation
 
-        Args:
-            mps: an MPS representation of the probability in the spin basis representation
-
-        Returns:
-            p: a 2**n dimensional vector with the probabilities of all spin configurations 
-        '''    
-        if norm == 0:
-            norm = self.norm()
-            
-        n = len(self)
-        if n > 28:
-            raise ValueError("Too many nodes to compute all 2^n probabilities!")
-        p = self.tensors[0]
-        for i in range(1,n):
-            p = np.tensordot(p, self.tensors[i], axes = (-1,0))
-        return p.reshape(2**n)/norm
-    
     def observables(self, norm=0):
         '''
         Explicitly compute all observables from the MPS representation
@@ -365,106 +384,32 @@ class SpinModelMPS(MPS):
         
         return float(tens)/norm 
     
-#     def sample_array(self):
-#         n = len(self)
-#         flat = np.ones(2)
-#         up=np.array([1,0])
-#         down=np.array([0,1])
-        
-#         if self.Rs == None:
-#             self.compute_Rs()
-#         else:
-#             pass
+    def Hadamard_transform(self):
+        H1 = np.array([[1,1],[1,-1]])
+        obsmps = self.n*[None]
+        for i in range(len(self)):
+            obsmps[i] = np.tensordot(self.tensors[i], H1, axes = [1,0]).transpose(0,2,1)
+        return MPS(tensors = obsmps, canonicalize = False)
 
-#         sample = []
-#         Ls = {}
+    def gMPS(self):
+        gmps = individual_g(self.mus[0],self.Js[0],self.n)
+        for k in range(1,len(self.mus)):
+            gnew = individual_g(self.mus[k],self.Js[k],self.n)
+            gmps = add_operator(gmps,gnew)
+        return gmps
 
-#         p0 = np.tensordot(self.tensors[0], self.Rs[0], axes = [2,0])
-#         p0[p0<0]=0
-#         p0 = p0.reshape(2)/np.sum(p0)
-        
-#         sample.append(np.random.choice([0,1],p = p0))
-#         if sample[0] == 0:
-#             Ls[1] = np.tensordot(self.tensors[0],up, axes = [1,0])
-#         else:
-#             Ls[1] = np.tensordot(self.tensors[0],down, axes = [1,0])
+    def entropy(self):
+        gmps = self.gMPS()
+        Z = self.norm()
 
-#         for i in range(1,n-1):
-#             pi = np.tensordot(np.tensordot(Ls[i],self.tensors[i],axes = [1,0]),self.Rs[i], axes = [2,0])
-#             pi = pi.reshape(2)
-#             pi[pi<0] = 0
-#             pi /= sum(pi)
-#             sample.append(np.random.choice([0,1],p = pi))
-#             if sample[i] == 0:
-#                 Ls[i+1] = np.tensordot(Ls[i], np.tensordot(self.tensors[i],up, axes = [1,0]), axes = [1,0])
-#             else:
-#                 Ls[i+1] = np.tensordot(Ls[i], np.tensordot(self.tensors[i],down, axes = [1,0]), axes = [1,0])
-
-#         pn = np.tensordot(Ls[n-1], self.tensors[n-1], axes = [1,0])
-#         pn = pn.reshape(2)
-#         pn[pn<0]=0
-#         pn /= sum(pn)
-#         sample.append(np.random.choice([0,1],p = pn))
-
-#         return np.array(sample)
-    
-    def sample_array(self,batch_size=6):
-        n = len(self)
-
-        num_batches = n//batch_size
-        remainder = n%batch_size
-
-        flat = np.ones(2)
-        up=np.array([1,0])
-        down=np.array([0,1])
-
-        if self.Rs == None:
-            self.compute_Rs()
-        else:
-            pass
-
-        sample = []
-        Ls = {0: np.ones(1)}
-
-        for x in range(num_batches):
-            i = x*batch_size
-            p = np.tensordot(Ls[x*batch_size], self.tensors[x*batch_size], axes = [-1,0])
-            for y in range(1,batch_size):
-                i += 1
-                p = np.tensordot(p, self.tensors[i], axes = [-1,0])
-            if i < n-1:
-                p = np.tensordot(p, self.Rs[i], axes = [-1,0])
-            p[p<0]=0
-            p = p.flatten()/np.sum(p)
-
-            choice = np.random.choice([i for i in range(2**batch_size)],p = p)
-            sample.extend(self.int_to_sample(choice,width=batch_size))
-
-            for y in range(batch_size):
-                i = x*batch_size + y
-                temp = np.tensordot(Ls[i], self.tensors[i], axes = [-1,0])
-
-                if sample[i] == 0:
-                    Ls[i+1] = np.tensordot(temp, up, axes = [0,0])
-                else:
-                    Ls[i+1] = np.tensordot(temp,down, axes = [0,0])
-
-        if remainder != 0:
-            i = num_batches*batch_size
-            p = np.tensordot(Ls[i], self.tensors[i], axes = [-1,0])
-            for y in range(1,remainder):
-                i +=  1
-                p = np.tensordot(p, self.tensors[i], axes = [-1,0])
-            if i < n-1:    
-                p = np.tensordot(p, self.Rs[i], axes = [-1,0])
-            p[p<0]=0
-            p = p.flatten()/np.sum(p)
-
-            choice = np.random.choice([i for i in range(2**remainder)],p = p)
-            sample.extend(self.int_to_sample(choice,width=remainder))
-
-
-        return np.array(sample)
+        tens = np.ones((1,1))
+        H1 = np.array([[1,1],[1,-1]])
+        for i in range(self.n):
+            tensHT = np.tensordot(self.tensors[i], H1, axes = [1,0]).transpose(0,2,1)
+            tens = np.tensordot(tens, tensHT, axes = [0,0])
+            tens = np.tensordot(tens, gmps[i], axes = ([0,1],[0,1]))
+        gdotphi = tens.reshape(1)/Z
+        return np.log(Z) - gdotphi[0]
     
     def sample_array2(self,num):
         '''
