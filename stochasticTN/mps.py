@@ -43,6 +43,7 @@ class MPS:
         self.tensors = tensors
         self.center = center
         self.name = name
+        self.Rs = None
         
         if canonicalize:
             self.canonicalize()
@@ -161,7 +162,7 @@ class MPS:
         else:
             raise ValueError("'cx' should be either 'stoch' or 'complex'")
             
-    def probabilities(self):
+    def probabilities(self, norm = 0):
         '''
         Explicitly compute all probabilities from the MPS representation. 
         Exponentially costly, so only use for small MPSs to compare with exact results
@@ -180,13 +181,16 @@ class MPS:
         if n > 28:
             raise ValueError("MPS is too large to compute all probabilities!")
             
+        if norm == 0:
+            norm = self.norm()
+            
         p = self.tensors[0]
         for i in range(1,n):
             p = np.tensordot(p, self.tensors[i], axes = (-1,0))
         if self.bond_dimensions[0] != 1:
             p = np.trace(p, axis1 = 0, axis2 = -1)
         
-        return p.reshape(2**n)/self.norm()
+        return p.reshape(2**n)/norm
             
     def save(self, name: Optional['str'] = None):
         ''' Routine to save mps tensors to store for later use
@@ -218,6 +222,93 @@ class MPS:
         
         for i, tensor in enumerate(self):
             np.save(PATH+'tensor'+str(i),tensor)
+            
+    def compute_Rs(self):
+        ''' Computes all right environments needed for trace and sampling algo
+        '''
+        n = len(self)
+        flat = np.ones(2)
+        self.Rs = {n-1: np.ones(1)}
+#         self.Rs = {n-2: np.tensordot(self.tensors[n-1], flat, axes = [1,0])}
+        for i in range(n-2,-1,-1):
+            keti = np.tensordot(self.tensors[i+1], flat, axes = [1,0])
+            self.Rs[i] = np.tensordot(keti, self.Rs[i+1], axes = [1,0])
+            
+    def int_to_sample(self,num, width=None):
+        ''' Takes number `num` and returns np.ndarray of the binary representation of this number'''
+        return  np.array(list(np.binary_repr(num, width=width)),dtype=int)
+    
+    def sample_array(self,batch_size=6, method = 'random'):
+        '''
+        Method to sample array of bits from the proability distribution represented by the mps
+        '''
+        n = len(self)
+
+        num_batches = n//batch_size
+        remainder = n%batch_size
+
+        flat = np.ones(2)
+        up=np.array([1,0])
+        down=np.array([0,1])
+
+        if self.Rs == None:
+            self.compute_Rs()
+        else:
+            pass
+
+        sample = []
+        Ls = {0: np.ones(1)}
+
+        for x in range(num_batches):
+            i = x*batch_size
+            p = np.tensordot(Ls[x*batch_size], self.tensors[x*batch_size], axes = [-1,0])
+            for y in range(1,batch_size):
+                i += 1
+                p = np.tensordot(p, self.tensors[i], axes = [-1,0])
+            if i < n-1:
+                p = np.tensordot(p, self.Rs[i], axes = [-1,0])
+            p[p<0]=0
+            p = p.flatten()/np.sum(p)
+            
+            if method == 'random':
+                choice = np.random.choice([i for i in range(2**batch_size)],p = p)
+            elif method == 'greedy':
+                choice = np.argmax(p)
+            else:
+                raise ValueError("Please specify method for sampling")
+            sample.extend(self.int_to_sample(choice,width=batch_size))
+
+            for y in range(batch_size):
+                i = x*batch_size + y
+                temp = np.tensordot(Ls[i], self.tensors[i], axes = [-1,0])
+
+                if sample[i] == 0:
+                    Ls[i+1] = np.tensordot(temp, up, axes = [0,0])
+                else:
+                    Ls[i+1] = np.tensordot(temp,down, axes = [0,0])
+
+        if remainder != 0:
+            i = num_batches*batch_size
+            p = np.tensordot(Ls[i], self.tensors[i], axes = [-1,0])
+            for y in range(1,remainder):
+                i +=  1
+                p = np.tensordot(p, self.tensors[i], axes = [-1,0])
+            if i < n-1:    
+                p = np.tensordot(p, self.Rs[i], axes = [-1,0])
+            p[p<0]=0
+            p = p.flatten()/np.sum(p)
+            
+            if method == 'random':
+                choice = np.random.choice([i for i in range(2**remainder)],p = p)
+            elif method == 'greedy':    
+                choice = np.argmax(p)
+            else:
+                raise ValueError("Please specify method for sampling")
+                
+            sample.extend(self.int_to_sample(choice,width=remainder))
+
+
+        return np.array(sample)
         
             
 def randomMPS(N,D,d=2, bc = 'open'):
