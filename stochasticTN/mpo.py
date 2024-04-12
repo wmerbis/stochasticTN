@@ -36,6 +36,9 @@ class MPO:
         
         Args:
             tensors: A list of numpy arrays constituting the tensors of the MPS
+            center: MPS is in (mixed) canonical form with respect to this site. 
+                    If None, the mpo is not in canonical form
+            canonicalize: brings the mpo into canonical form with respect to the leftmost site (0) if True
         """
                     
         self.tensors = tensors
@@ -246,10 +249,21 @@ class network_SIS(MPO):
     Builds an MPO for the epsilon-SIS Markovian network model 
     '''
     def __init__(self, A, r: float, s: float, 
-               epsilon: Optional[float] = 1e-3,
+               epsilon: Optional[float] = 1e-2,
                cutoff: Optional[float] = 1e-12)->None:
         '''
-        Docstring
+        Construct the MPO for the epsilon SIS process on a network. Recovery rate is set to 1.
+        
+        Args:
+            A: Adjacency matrix of the network as 2-dimensional array. Edge weights are accounted for such that the 
+               transmission probability is r*A[i,j] from nodes i to j and r*A[j,i] from node j to i
+            r: transmission rate
+            s: tilting parameter, multiplies all off-diagonal terms by exp(s)
+            epsilon: spontaneous infection rate
+            cutoff: size of minimal bond dimensions to keep when compressing the final MPO
+            
+        Returns:
+            MPO
         '''
         self.r = r
         self.s = s
@@ -285,13 +299,13 @@ class network_SIS(MPO):
 
         for i in range(len(self)):
             for j in range(i,len(self)):
-                if A[i,j] != 0:
-                    self.add_edge(i, j, r, s)
-                    e += self.canonicalize(normalize_SVs = False, cutoff = cutoff) 
+                if A[i,j] != 0 or A[j,i] != 0:
+                    self.add_edge(i, j, r*A[i,j], r*A[j,i], s)
+        e += self.canonicalize(normalize_SVs = False, cutoff = cutoff) 
         
         return
                        
-    def add_edge(self,i,j,r,s):
+    def add_edge(self,i,j,rij, rji,s):
         N = len(self)
         d=2
         Ni = np.array([ [0, 0], [0, 1] ])
@@ -311,11 +325,11 @@ class network_SIS(MPO):
                 if k ==0:
                     self.tensors[k] = np.pad(self.tensors[k],((0,0),(0,0),(0,0),(0,2)))
                     self.tensors[k][0,:,:,-2] = Ni
-                    self.tensors[k][0,:,:,-1] = r*Wsi
+                    self.tensors[k][0,:,:,-1] = rji*Wsi
                 else:
                     self.tensors[k] = np.pad(self.tensors[k],((0,1),(0,0),(0,0),(0,2)))
                     self.tensors[k][-1,:,:,-2] = Ni
-                    self.tensors[k][-1,:,:,-1] = r*Wsi
+                    self.tensors[k][-1,:,:,-1] = rji*Wsi
             elif k > i and k < j:
                 self.tensors[k] = np.pad(self.tensors[k],((0,2),(0,0),(0,0),(0,2)))
                 self.tensors[k][-2,:,:,-2] = ID
@@ -323,11 +337,11 @@ class network_SIS(MPO):
             elif k == j:
                 if k==N-1:
                     self.tensors[k] = np.pad(self.tensors[k],((0,2),(0,0),(0,0),(0,0)))
-                    self.tensors[k][-2,:,:,0] = r*Wsi
+                    self.tensors[k][-2,:,:,0] = rij*Wsi
                     self.tensors[k][-1,:,:,0] = Ni
                 else:
                     self.tensors[k] = np.pad(self.tensors[k],((0,2),(0,0),(0,0),(0,1)))
-                    self.tensors[k][-2,:,:,-1] = r*Wsi
+                    self.tensors[k][-2,:,:,-1] = rij*Wsi
                     self.tensors[k][-1,:,:,-1] = Ni
             elif k > j:
                 if k == N-1:
