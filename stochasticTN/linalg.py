@@ -40,12 +40,6 @@ def svd(tensor: np.ndarray,
         s /= s.sum()
     truncation_error = 0
     curD = len(s)
-    while s[-1] <= cutoff:
-        truncation_error += s[-1]
-        curD -=1
-        s = s[:curD]
-    u = u[:,:curD]
-    v = v[:curD,:]
     
     if Dmax is not None and curD > Dmax:
         truncation_error += sum(s[Dmax:])
@@ -53,7 +47,14 @@ def svd(tensor: np.ndarray,
         s = s[:Dmax]
         v = v[:Dmax,:]
         curD =Dmax
-        
+    
+    if s[-1] <= cutoff:
+        truncation_error = s[s<=cutoff].sum()
+        s = s[s>cutoff]
+        curD = len(s)
+        u = u[:,:curD]
+        v = v[:curD,:]
+            
     return np.reshape(u, shape[:axis]+(curD,)), s, np.reshape(v, (curD,)+shape[axis:]), truncation_error
 
 

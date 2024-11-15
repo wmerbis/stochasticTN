@@ -102,7 +102,7 @@ Returns:
 - `DMRG.run_double_site_dmrg()` Runs the DMRG algorithm by optimizing two adjacent sites in the mps at the same time. This allows for dynamical adjustment of the MPS bond dimensions. Argumments are the same as for the single site updates.
 
 #### `operations.py`
-This files contains several functions which are convenient for performing computations using the MPS and MPO. Most notably:
+This file contains several functions which are convenient for performing computations using the MPS and MPO. Most notably:
 - `overlap(mps1, mps2)`: computes the overlap between `mps1` and `mps2`
 - `MPOexpectation(mps,mpo)`: computes the expectation value of the `mpo` on the `mps`. Specify `cx = 'stoch'` for the $$L^1$$ expectation value (default) and `cx = 'complex'` for the $$L^2$$ expectation value
 - `MPSvariance(mps, mpo)`: computes the variance of an MPO as the expectation value of the square of the MPO. Specify `cx = 'stoch'` for the $$L^1$$ expectation value (default) and `cx = 'complex'` for the $$L^2$$ expectation value
@@ -115,3 +115,17 @@ This files contains several functions which are convenient for performing comput
 - `compute_pk_infected(mps)`: returns a list of N+1 elements whose k-th component is the probability of having exactly k occupied in the mps
 - `find_permutation(L)`: returns the permutation which brings MPS into the optimal ordering. Based on the first Fielder vector of the graph Laplacian `L`.
 
+#### `information_measures.py`
+
+Collects various functions which compute information theoretic quantities from the MPS representation. It contains:
+- `ShannonE(mps)`: computes the Shannon entropy of the complete distribution. Note that this is exponentially costly in the number of MPS sites so only use for small MPS (`n<28`)
+- `mutual_information(mps, site)`: Computes the mutual information between the halves of the system, separated at `site`. Also exponentially costly as it uses the full distribution
+- `singular_value_entropy(mps, site)`: computes the entropy of the singular value spectrum of the bond right of `site`. Use `method='square'` to get the entropy of the squares of the SVs (default), `method = 'linear'` gives the entropy of the SV distribution directly
+- `second_Renyi_entropy(mps)`: computes the second Renyi entropy based on the MPS
+- `second_Renyi_EE(mps,site)`: computes the second Renyi entanglement entropy across the bond to the right of `site`
+- `second_Renyi_MI(mps,site)`: Computes the second Renyi mutual information in the MPS across the bond right of `site`
+- `MI_matrix(mps)`: Computes the matrix of pairwise mutual information between the nodes
+
+#### `linalg.py`
+
+This file essentially only contains a costum singular value decomposition function which is able to handle tensors of any shape and allows from the trunctation of the singular value spectrum up to keeping a maximal of `Dmax` singular values above a fixed threshold set by `cutoff`.
