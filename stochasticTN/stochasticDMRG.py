@@ -496,7 +496,6 @@ class DMRG:
         converged = False
         variance = 1
         num_sweeps = 0
-        truncation_error = 0
         if self.mpo.s == 0:
             density_mpo = occupancy_MPO(N)
             final_energy = MPOexpectation(self.mps, density_mpo, self.cx)/self.mps.norm(self.cx)/N
@@ -509,7 +508,6 @@ class DMRG:
         
         while not converged:
             en, err = self.double_site_sweep(tol, Dmax, cutoff, ncv, verbose)
-            truncation_error += err
             
             norm = self.mps.norm(self.cx)
             if self.mpo.s == 0:
@@ -544,4 +542,4 @@ class DMRG:
         elif verbose:
             print('\ns = %.6f,   n_s = %2i,   FE = %.9f,   delFE = %.9f   tps = %.2fs   <D>= %.2f   maxD = %i' %(self.mpo.s, num_sweeps, final_energy, variance, compt/num_sweeps, np.mean(self.mps.bond_dimensions[1:-1]), max(self.mps.bond_dimensions) ))
         
-        return final_energy, variance, truncation_error, converged
+        return final_energy, variance, err, converged
