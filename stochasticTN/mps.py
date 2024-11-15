@@ -418,6 +418,10 @@ def mps_from_array(array):
     Returns:
         mps: the mps    
     '''
+
+    if not all(isinstance(x, (int, float)) and 0 <= x <= 1 for x in array):
+        raise ValueError("All elements in the list must be numbers between 0 and 1.")
+
     N = len(array)
     tensors = N*[None]
     zero = np.array([1,0]).reshape(1,2,1)
@@ -428,9 +432,9 @@ def mps_from_array(array):
             tensors[i] = zero
         elif array[i] == 1:
             tensors[i] = one
-        else:
-            raise ValueError("Input array should contain only bits (0 or 1)") 
-
+        else:     
+            tensors[i] = array[i]*one + (1-array[i])*zero
+        
     return MPS(tensors, canonicalize=False)
 
 
