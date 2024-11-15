@@ -22,8 +22,8 @@ class DMRG:
     """
     
     def __init__(self, mps: MPS, mpo: MPO,
-                 left_bdy: Tensor,
-                 right_bdy: Tensor,
+                 left_bdy: Optional[Tensor] = np.ones((1,1,1)),
+                 right_bdy: Optional[Tensor] = np.ones((1,1,1)),
                 cx: Optional[str] = 'stoch'):
         """ Class for DMRG simulations
 
