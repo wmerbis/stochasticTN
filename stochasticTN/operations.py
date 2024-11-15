@@ -292,9 +292,7 @@ def MPOMPOcontraction(mpo1: MPO, mpo2: MPO,
         mpo.center = N-1
         e = mpo.position(0, True, Dmax, cutoff) 
         err += e
-        
-
-        
+               
     return mpo, err
     
 

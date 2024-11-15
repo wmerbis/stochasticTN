@@ -20,13 +20,13 @@ deviation statistics and characterize the active-inactive phase transition using
   > Wout Merbis, Clélia de Mulatier, Philippe Corboz
   > [arxiv/2305.06815](https://arxiv.org/abs/2305.06815)
 
-We refer to there and the example notebook ``Examples.ipynb`` for more information on the large deviation statistics on the SIS model in one-dimension. In the notebook ``Network_example.ipynb`` we showcase an example based on using DMRG to find the non-equilibrium steady state on networks. 
+We refer to there and the example notebook ``Examples.ipynb`` for more information on the large deviation statistics on the SIS model in one-dimension. In the notebook ``Network_example.ipynb`` we showcase an example based on using DMRG to find the non-equilibrium steady state of the SIS model on networks. 
 
 ## Repository contents
 
 ### stochasticTN
 
-Code base for performing computations with Matrix Product State (MPS, sometimes called tensor trains) representations of large probability distributions. It is divided into several distinct files
+Code base for performing computations with Matrix Product State (MPS, sometimes called tensor trains) representations of large probability distributions. It is divided into several files.
 
 #### `mps.py`
 `mps.py` defines the MPS class for the stochasticTN package defining the MPS object with attributes:
@@ -40,7 +40,7 @@ The MPS object is iterable, where iterating the MPS means iterating over MPS.ten
 `mps.py` contains many methods which are convenient for computations. Most notably:
 - `.position(site)` moves the `mps.center` to the specified site by series of singular value decompositions. Specifying `normalize_SVs = True` rescales all singular values to form a distribution which sums to 1. Specifying `Dmax` or `cutoff` truncates the singular value spectrum to maximally `Dmax` SVs with magnitude above `cutoff`
 - `.canonicalize()` puts the MPS in canonical form with respect to the left-most site (0) such that all tensors on the right are unitaries. Specifying `normalize_SVs = True` rescales all singular values to form a distribution which sums to 1. Specifying `Dmax` or `cutoff` truncates the singular value spectrum to maximally `Dmax` SVs with magnitude above `cutoff`
-- `norm()` returns the norm of the MPS. There are two protocols for computing the norm: `cx = 'stoch'` computes the $$L^1$$ norm (default), `cx = 'complex'` computes the $$L^2$$ norm for complex valued MPS tensors
+- `.norm()` returns the norm of the MPS. There are two protocols for computing the norm: `cx = 'stoch'` computes the $$L^1$$ norm (default), `cx = 'complex'` computes the $$L^2$$ norm for complex valued MPS tensors
 - `.probabilties()` returns all $$2^n$$ probabilities as computed from the MPS, so this is exponentially costly. Raises a ValueError when `len(MPS)>28`
 - `.save('name')` saves the MPS tensors and attributes in local folder "/MPSs/name/"
 - `.sample_array()` returns an array sampled according to the probability distribution represented by the MPS
@@ -81,3 +81,37 @@ It furthermore contains several functions to construct the MPO representation of
 - `project_on_k_healthy(N,k)`: Builds an MPO of length `N` which projects on all configurations with `k` healthy (vacant) sites
 
 #### `stochasticDMRG.py`
+
+Defines the DMRG class used for running the DMRG algorithm which enables one to find the non-equilibrium steady state of Markov processes and to compute the scaled cumulant generating function for the dynamical activity in those processes as the leading eigenvalue of the tilted Markov generators.
+
+The `DMRG` object itself is defined by specifying an `MPS` object to initiate the DMRG with and an `MPO` object whose leading eigenvector is sought in MPS form. Optionally, one can specify a left and right environment. The DMRG algorithm is run by calling:
+- `DMRG.run_single_site_dmrg()` Runs the DMRG algorithm by optimizing single sites in the mps. Argumments are:
+  - `MaxSweeps`: maximal number of sweeps
+  - `accuracy`: Global accuracy as convergence criteria for the variance in energy
+  - `tol`: Relative accuracy for local eigenvalues (stopping criterion) 
+  - `Dmax`: maximal number of bond dimensions to keep per site
+  - `cutoff`: maximal absolute value for the singular values, SVs below this value are dropped
+  - `ncv`: The number of Lanczos vectors for the single site optimization
+  - `verbose`: Boolean, if True will print the sweep results 
+Returns:
+  - `energy`: eigenvalue of the MPO (returns the density if tilting parameter s=0)
+  - `variance`: variance in the eigenvalue (returns variance in density if tilting parameter s=0)
+  - `truncation_error`: size of the singular values discarded during the final sweep
+  - `converged`: Boolean, returns True if the algorithm has converged, False otherwise
+
+- `DMRG.run_double_site_dmrg()` Runs the DMRG algorithm by optimizing two adjacent sites in the mps at the same time. This allows for dynamical adjustment of the MPS bond dimensions. Argumments are the same as for the single site updates.
+
+#### `operations.py`
+This files contains several functions which are convenient for performing computations using the MPS and MPO. Most notably:
+- `overlap(mps1, mps2)`: computes the overlap between `mps1` and `mps2`
+- `MPOexpectation(mps,mpo)`: computes the expectation value of the `mpo` on the `mps`. Specify `cx = 'stoch'` for the $$L^1$$ expectation value (default) and `cx = 'complex'` for the $$L^2$$ expectation value
+- `MPSvariance(mps, mpo)`: computes the variance of an MPO as the expectation value of the square of the MPO. Specify `cx = 'stoch'` for the $$L^1$$ expectation value (default) and `cx = 'complex'` for the $$L^2$$ expectation value
+- `MPSMPOcontraction(mps, mpo)`: contracts the mps with an mpo site by site. Optionally performs truncation if `renormalize` is True. Overwrites mps with the contracted result. Specify `Dmax` and `cutoff` to truncate to a maximum of `Dmax` singular values with values above `cutoff`.
+- `MPOMPOcontraction(mpo1, mpo2)`: contracts the mpo1 with mpo2 site by site. Optionally performs truncation if `renormalize` is True. Overwrites mps with the contracted result. Specify `Dmax` and `cutoff` to truncate to a maximum of `Dmax` singular values with values above `cutoff`. 
+- `single_site_occupancy(mps, site)`: computes the expectation value for `site` to be occupied
+- `single_site_vacancy(mps, site)`: computes the expectation value for `site` to be empty
+- `single_site_magnetization(mps, site)`: computes the magnetization expectation value for `site`
+- `marginal(mps, sites)`: computes the marginal distribution over the sites specified in the array `sites`
+- `compute_pk_infected(mps)`: returns a list of N+1 elements whose k-th component is the probability of having exactly k occupied in the mps
+- `find_permutation(L)`: returns the permutation which brings MPS into the optimal ordering. Based on the first Fielder vector of the graph Laplacian `L`.
+
