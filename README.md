@@ -85,7 +85,7 @@ It furthermore contains several functions to construct the MPO representation of
 Defines the DMRG class used for running the DMRG algorithm which enables one to find the non-equilibrium steady state of Markov processes and to compute the scaled cumulant generating function for the dynamical activity in those processes as the leading eigenvalue of the tilted Markov generators.
 
 The `DMRG` object itself is defined by specifying an `MPS` object to initiate the DMRG with and an `MPO` object whose leading eigenvector is sought in MPS form. Optionally, one can specify a left and right environment. The DMRG algorithm is run by calling:
-- `DMRG.run_single_site_dmrg()` Runs the DMRG algorithm by optimizing single sites in the mps. Argumments are:
+- `DMRG.run_single_site_dmrg()` Runs the DMRG algorithm by optimizing single sites in the mps. Arguments are:
   - `MaxSweeps`: maximal number of sweeps
   - `accuracy`: Global accuracy as convergence criteria for the variance in energy
   - `tol`: Relative accuracy for local eigenvalues (stopping criterion) 
@@ -93,7 +93,8 @@ The `DMRG` object itself is defined by specifying an `MPS` object to initiate th
   - `cutoff`: maximal absolute value for the singular values, SVs below this value are dropped
   - `ncv`: The number of Lanczos vectors for the single site optimization
   - `verbose`: Boolean, if True will print the sweep results 
-Returns:
+
+  Returns:
   - `energy`: eigenvalue of the MPO (returns the density if tilting parameter s=0)
   - `variance`: variance in the eigenvalue (returns variance in density if tilting parameter s=0)
   - `truncation_error`: size of the singular values discarded during the final sweep
@@ -129,3 +130,7 @@ Collects various functions which compute information theoretic quantities from t
 #### `linalg.py`
 
 This file essentially only contains a costum singular value decomposition function which is able to handle tensors of any shape and allows from the trunctation of the singular value spectrum up to keeping a maximal of `Dmax` singular values above a fixed threshold set by `cutoff`.
+
+### spinmodelTN
+
+The spin model Tensor network library is still very much under development. It builds on the stochasticTN code base to create MPS and Tree Tensor Networks (TTN) for probability distributions over spin models with (arbitrary) higher-order interactions.
