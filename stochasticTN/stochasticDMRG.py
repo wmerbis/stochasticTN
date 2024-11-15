@@ -292,18 +292,19 @@ class DMRG:
             Dmax: maximal number of bond dimensions to keep per site
             cutoff: maximal absolute value for the singular values, SVs below this value are dropped
             ncv: The number of Lanczos vectors
+            verbose: Boolean, if True will print output of the sweep
             
         Returns:
             energy: energy after the sweep
             variance: variance in energy of converged mps
             truncation_error: size of the total number of singular values discarded during the sweep
+            converged: Boolean, returns True if the algorithm has converged, False otherwise
         '''
                
         N = len(self.mps)
         converged = False
         variance = 1
         num_sweeps = 0
-        truncation_error = 0
         final_energy = 1e100
         
         if self.mpo.s is not None and self.mpo.s == 0:
@@ -314,8 +315,7 @@ class DMRG:
         start_time=time.time()
         
         while not converged:
-            en, err = self.single_site_sweep(tol, Dmax, cutoff, ncv, verbose = False)
-            truncation_error += err
+            en, err = self.single_site_sweep(tol, Dmax, cutoff, ncv, verbose = verbose)
             
             norm = self.mps.norm(self.cx)
             if self.mpo.s == 0:
@@ -347,7 +347,7 @@ class DMRG:
         elif verbose:
             print('s = %.6f,    n = %2i,    FE = %.9f,    delFE = %.9f    tps = %.2fs    <D>= %.2f   maxD = %i' %(self.mpo.s, num_sweeps, energy, variance, compt/num_sweeps, np.mean(self.mps.bond_dimensions[1:-1]), max(self.mps.bond_dimensions) ))
         
-        return final_energy, variance, truncation_error, converged
+        return final_energy, variance, err, converged
     
     def optimize_double_site(self, site: int, 
                              sweep_direction: str,
@@ -486,11 +486,13 @@ class DMRG:
             Dmax: maximal number of bond dimensions to keep per site
             cutoff: maximal absolute value for the singular values, SVs below this value are dropped
             ncv: The number of Lanczos vectors
+            verbose: Boolean, if True will print results for the double site sweep
             
         Returns:
             energy: energy after the sweep
             variance: variance in energy of converged mps
             truncation_error: size of the total number of singular values discarded during the sweep
+            converged: Boolean, returns True if the algorithm has converged, False otherwise
         '''
         N = len(self.mps)       
         converged = False
