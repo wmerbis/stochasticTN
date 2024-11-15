@@ -30,7 +30,7 @@ Code base for performing computations with Matrix Product State (MPS, sometimes 
 
 #### `mps.py`
 `mps.py` defines the MPS class for the stochasticTN package defining the MPS object with attributes:
-- `.tensors` gives a list of the MPS tensors
+- `.tensors` gives a list of the MPS tensors. All tensors are rank-3 tensors with index structure (left, physical, right).
 - `.center` gives the location of the center node in the mixed canonical representation of the mps (all tensors to the left and right of 'center' are unitary matrices w.r.t. contraction from the left/right respectively)
 - `.name` optional name for the mps
 - `.bond_dimensions` gives a list of bond dimensions of the MPS
@@ -55,6 +55,29 @@ Additionally `mps.py` contains functions for creating some frequently used MPS o
 
 #### `mpo.py`
 
+Here we define the MPO object for the stochasticTN package. It has as main attributes and methods:
+- `MPO.tensors`: A list of MPS tensors with length N and index structure (left, down, up, right)
+- `MPO.center`: Location of orthogonality site of the MPO. Can be moved with `MPO.position(site)`
+- `MPO.bond_dimensions` list of local bond dimensions with length N + 1
+- `MPO.physical_dimensions`: gives list of physical dimensions of the MPO
+- `MPO.canonicalize()`: puts the MP) in canonical form with respect to the left-most site (0) such that all tensors on the right are unitaries. Specifying `normalize_SVs = True` rescales all singular values to form a distribution which sums to 1. Specifying `Dmax` or `cutoff` truncates the singular value spectrum to maximally `Dmax` SVs with magnitude above `cutoff`
 
+It furthermore contains several functions to construct the MPO representation of various infinitesimal Markov generators or MPOs which are useful for computing observables when contracted with the MPS
+- `SIS_MPO(N,r,s,driving, omega)`: constructs the Markov generator for the SIS process on a 1-dimensional lattice, Arguments are:
+  - `N`: length of MPO
+  - `r`: effective transmission rate between nearest-neighbors
+  - `s`: tilting parameter for the dynamical activity
+  - `driving`: driving protocol. Choose from 'boundary', 'right boundary', 'left boundary', 'absorbing', 'spontaneous'
+  - `omega`: infection rate for the driving term
+- `network_SIS(A,r,s,epsilon,cutoff)`: constructs the MPO for the SIS model on a network. Arguments:
+  - `A`: network adjacency matrix as 2-dimensional array. Edge weights are accounted for such that the transmission probability is r*A[i,j] from nodes i to j and r*A[j,i] from node j to i
+  - `r`: effective transmission rate between nearest neighbors
+  - `s`: tilting parameter for the dynamical activity
+  - `epsilon`: spontaneous infection rate
+  - `cutoff`: optional size of minimal bond dimensions to keep when compressing the final MPO
+- `occupancy_MPO(N)`: constructs an MPO of length `N` which projects on the occupied state. Its expectation value gives the expected number of occupied sites in the MPS
+- `gapMPO(N,k)`: constructs an MPO of length `N` which projects on all configurations with `k` vacant sites in a row
+- `project_on_k_infected(N,k)`: Builds an MPO of length `N` which projects on all configurations with `k` infected (occupied) sites
+- `project_on_k_healthy(N,k)`: Builds an MPO of length `N` which projects on all configurations with `k` healthy (vacant) sites
 
-
+#### `stochasticDMRG.py`
