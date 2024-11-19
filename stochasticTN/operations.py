@@ -331,6 +331,10 @@ def single_site_occupancy(mps: MPS, site: int, norm: Optional[bool] = 0):
         PIcont=np.tensordot(PIcont,PIconti, axes=[1,0])
     
     return np.trace(PIcont)/norm
+
+def local_densities(mps):
+    densities = [single_site_occupancy(mps , i) for i in range(len(mps))]
+    return np.array(densities)
     
 def single_site_vacancy(mps: MPS, site: int, norm: Optional[bool] = 0):
     ''' Computes the expectation value for 'site' to be empty
