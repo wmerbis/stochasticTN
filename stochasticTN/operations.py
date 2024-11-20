@@ -332,8 +332,11 @@ def single_site_occupancy(mps: MPS, site: int, norm: Optional[bool] = 0):
     
     return np.trace(PIcont)/norm
 
-def local_densities(mps):
-    densities = [single_site_occupancy(mps , i) for i in range(len(mps))]
+def local_densities(mps, norm: Optional[bool] = 0):
+    ''' Computes the single site occupancies for all sites, returns array with local densities'''
+    if norm == 0:
+        norm = mps.norm()
+    densities = [single_site_occupancy(mps , i, norm) for i in range(len(mps))]
     return np.array(densities)
     
 def single_site_vacancy(mps: MPS, site: int, norm: Optional[bool] = 0):
